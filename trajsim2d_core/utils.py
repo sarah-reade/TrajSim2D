@@ -17,7 +17,7 @@
 ###############################################################################
 
 # Imports
-
+import numpy as np
 
 ## Generate random arm parameters
 
@@ -27,3 +27,14 @@
 
 ## Save outputs 
 
+## Calculate Array Diffs
+def calc_array_diff(array):
+    """
+    @brief Calculate differences between consecutive elements in an array or list.
+    @param array List or NumPy array of floats.
+    @return List or NumPy array of float differences, matching the input type.
+    """
+    data = np.array(array, dtype=float)  # ensure it's a NumPy array of floats
+    diff = np.diff(data)
+    # Return same type as input
+    return diff.tolist() if isinstance(array, list) else diff

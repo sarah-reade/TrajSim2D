@@ -25,13 +25,62 @@
 
 
 # Imports
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
 
-## Initialise visualisation 
+# Initialise visualisation 
+def initialise_visualisation(border,objects=None,base_transform=None,link_width=0.01,link_lengths=0.5,joint_config_1=None,joint_config_2=None):
+    """
+    @brief Initialise a 2D visualisation with a border.
+    @param border Nx2 np.ndarray defining the boundary.
+    @param objects Placeholder for objects (ignored for now).
+    @param base_transform Placeholder (ignored for now).
+    @param line_width Width of the border line.
+    @param link_lengths Placeholder (ignored for now).
+    @param joint_config_1 Placeholder (ignored for now).
+    @param joint_config_2 Placeholder (ignored for now).
+    @return Figure and axis handles.
+    """
+    fig, ax = plt.subplots()
+    ax.set_aspect('equal')
+    
+    initialise_figure(ax, border)
+    
+    # Set axis limits slightly beyond border
+    margin = 0.1
+    x_min, y_min = border.min(axis=0) - margin
+    x_max, y_max = border.max(axis=0) + margin
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(y_min, y_max)
+    
+    plt.ion()
+    plt.show()
+    
+    return fig, ax
 
-## Sync visualise trajectory
+## initialise graph
+def initialise_figure(ax, border, line_width = 0.01):
+    """
+    @brief Draws a closed polygon for the border.
+    @param ax Matplotlib axis.
+    @param border Nx2 np.ndarray defining the boundary.
+    @param line_width Width of the border line.
+    """
+    polygon = Polygon(border, closed=True, fill=False, edgecolor='black', linewidth=line_width)
+    ax.add_patch(polygon)
 
-## Async visualise trajectory
+    margin = 0.1
+    ax.set_xlim(border[:,0].min() - margin, border[:,0].max() + margin)
+    ax.set_ylim(border[:,1].min() - margin, border[:,1].max() + margin)
+    ax.set_aspect('equal')
 
-## Visualise outputs 
+## initialise objects
 
-## Wait for visualisation of trajectory to be over
+# Sync visualise trajectory
+
+# Async visualise trajectory
+
+# Visualise outputs 
+
+# Wait for visualisation of trajectory to be over

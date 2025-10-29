@@ -24,12 +24,35 @@
 ###############################################################################
 
 # Imports
-
+from utils import calc_array_diff
 
 # calculate outputs based on trajectory
-def calculate_outputs():
-    ## for all 
-    pass
+def evaluate_trajectory(traj):
+    ## for all timepoints
+
+    # calculate dt
+    dt = calc_array_diff(traj.time)
+
+    # calculate qdot
+
+    # calculate qdotdot
+
+    # calculate torque
+
+    # calculate base wrench force
+
+    return 
+
+# 
+
+
+# calculate torque
+def calculate_torque():
+    return calculate_static_torque()
+
+# calculate static torque
+def calculate_static_torque():
+    return
 
 # calculate base wrench force
 def calculate_base_wrench_force():
