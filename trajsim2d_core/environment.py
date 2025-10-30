@@ -26,49 +26,94 @@
 # Imports
 import numpy as np
 from scipy.ndimage import gaussian_filter1d  # smoother hills
-
+from trajsim2d_core.utils import generate_random_number,generate_random_int,generate_random_int_array
 
 # Initialise environment
+BORDER_SIZE = 5
+BORDER_CENTRE = BORDER_SIZE/2
 
 ## Generate random border
+def generate_random_border(border_size=BORDER_SIZE, smoothness=1, num_points=200):
+    """
+    @brief Generate a smooth, random circular border with periodic bumps.
+    """
+    
+    BORDER_SIZE = border_size
+    BORDER_CENTRE = border_size/2
+    return generate_random_circle(border_size,smoothness,num_points)
 
-def generate_random_border(border_size=1, smoothness=1, num_points=200):
+
+def generate_random_objects(num_points=60,object_size=None,object_max=None,smoothness=None,num_objects=None):
     """
-    @brief Generate a random circular border with smooth, hill-like bumps.
-    @param border_size Approximate diameter; border centered at border_size/2.
-    @param smoothness Float [0,1], 1 = perfect circle, 0 = maximum bumps.
-    @param num_points Number of points along the border.
-    @return Nx2 np.ndarray of (x, y) points defining the border.
+    @brief Generate a smooth, random circular object with periodic bumps.
     """
-    center = border_size / 2
-    radius = border_size / 2
+    objects = []
+    
+    if object_size != None:
+        object_max = object_size
+    
+        
+    elif object_max == None:
+        object_max = generate_random_number(0,BORDER_SIZE/4)
+    
+    
+    #print("object_size: ",object_size)
+    #print("object_max: ",object_max)    
+
+    if num_objects == None:
+        num_objects = generate_random_int(1,(BORDER_SIZE/object_max))
+    
+    #print("num_objects: ",num_objects)
+
+    for i in range(0,num_objects):
+        if smoothness == None:
+            smoothness = generate_random_number(0,1)
+
+        #print("smoothness: ",smoothness)
+
+        if object_size == None:
+            object_i_size = generate_random_number(0.1,object_max)
+        else:
+            object_i_size = object_size
+
+        #print("object_i_size: ",object_i_size)
+        centre = [generate_random_number(0.1,BORDER_SIZE),generate_random_number(0.1,BORDER_SIZE)]
+
+        objects.append(generate_random_circle(circle_size=object_i_size,smoothness=smoothness,num_points=num_points,circle_centre=centre))
+
+    return objects
+
+    
+
+## Generate a bumby circle 
+def generate_random_circle(circle_size=1, smoothness=1, num_points=200,circle_centre=None):
+    """
+    @brief Generate a smooth, random circle with periodic bumps.
+    """
+    if circle_centre == None:
+        circle_centre = [circle_size / 2,circle_size / 2]
+
+    radius = circle_size / 2
     
     angles = np.linspace(0, 2*np.pi, num_points, endpoint=False)
     
-    # Random positive bumps
-    np.random.seed()
+    # Random bumps
+
     max_bump = radius * (1 - smoothness)
-    bumps = np.abs(np.random.randn(num_points)) * max_bump
+    bumps = np.abs(generate_random_int_array(10,num_points,num_points)) * max_bump
     
-    # Apply Gaussian smoothing to make hills rounder
-    sigma = num_points / 20  # adjust for hill roundness
-    bumps = gaussian_filter1d(bumps, sigma)
+    # Circular Gaussian smoothing (wrap mode)
+    sigma = num_points / 60
+    #print("bumps: ",bumps)
+    #print("sigma: ",sigma)
+    #print("num_points",num_points)
+    bumps = gaussian_filter1d(bumps, sigma, mode='wrap')
     
-    # Final radius with smooth bumps
+    # Final radius
     r = radius + bumps
     
-    # Convert polar to Cartesian, centered
-    x = center + r * np.cos(angles)
-    y = center + r * np.sin(angles)
+    # Convert polar to Cartesian
+    x = circle_centre[0] + r * np.cos(angles)
+    y = circle_centre[1] + r * np.sin(angles)
     
     return np.column_stack((x, y))
-## 
-
-import matplotlib.pyplot as plt
-
-for s in [1.0, 0.75, 0.5, 0.0]:
-    border = generate_random_border(border_size=1, smoothness=s)
-    plt.plot(border[:,0], border[:,1], label=f'smoothness={s}')
-plt.gca().set_aspect('equal')
-plt.legend()
-plt.show()

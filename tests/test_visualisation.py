@@ -20,7 +20,7 @@ import unittest
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 
-from trajsim2d_core.environment import generate_random_border
+from trajsim2d_core.environment import generate_random_border, generate_random_objects
 from trajsim2d_core.visualisation import initialise_visualisation
 
 
@@ -28,19 +28,24 @@ from trajsim2d_core.visualisation import initialise_visualisation
 class TestVisualisation(unittest.TestCase):
     def test_initialise_visualisation_border_user_confirm(self):
         # Generate a random bumpy border for testing
-        border = generate_random_border(border_size=1, smoothness=2)
-        print(border.shape)  # Should be (N, 2)
-        print(border[:5])    # Sample first few points
+        border = generate_random_border(border_size=5, smoothness=0.7)
         # Initialise the visualisation
-        fig, ax = initialise_visualisation(border)
-        
-        # Draw and show the figure
-        plt.draw()
-        plt.pause(0.1)  # ensure it renders
+        canvas, border_id, object_ids  = initialise_visualisation(border)
         
         # Ask the user for confirmation
         user_input = input("Do you see the border correctly? (y/n): ").strip().lower()
-        plt.close(fig)
+        
+        # Pass/fail based on user input
+        self.assertIn(user_input, ['y', 'yes'], msg="User indicated the border is not correct.")
+
+    def test_initialise_visualisation_objects_user_confirm(self):
+        # Generate a random bumpy border for testing
+        objects = generate_random_objects(object_size=0.5,num_objects=5)
+        # Initialise the visualisation
+        canvas, border_id, object_ids  = initialise_visualisation(objects=objects)
+        
+        # Ask the user for confirmation
+        user_input = input("Do you see the objects correctly? (y/n): ").strip().lower()
         
         # Pass/fail based on user input
         self.assertIn(user_input, ['y', 'yes'], msg="User indicated the border is not correct.")

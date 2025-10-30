@@ -18,7 +18,7 @@
 
 import unittest
 import numpy as np
-from trajsim2d_core.utils import calc_array_diff
+from trajsim2d_core.utils import calc_array_diff, generate_random_number,generate_random_int,generate_random_int_array
 
 class TestCalcArrayDiff(unittest.TestCase):
 
@@ -54,6 +54,47 @@ class TestCalcArrayDiff(unittest.TestCase):
         expected = [-2.0, -2.0]
         np.testing.assert_allclose(result, expected, rtol=1e-9)
 
+class TestGenerateRandomNumber(unittest.TestCase):
+    """Tests for the generate_random_number() function with printouts."""
 
+    def test_output_type_and_bounds(self):
+        min_val = 1.0
+        max_val = 5.0
+        val = generate_random_number(min_val, max_val)
+        print(f"Generated random number: {val} (expected between {min_val} and {max_val})")
+        self.assertIsInstance(val, float)
+        self.assertGreaterEqual(val, min_val)
+        self.assertLess(val, max_val)
+
+    def test_multiple_calls(self):
+        min_val = 0.0
+        max_val = 10.0
+        val1 = generate_random_number(min_val, max_val)
+        val2 = generate_random_number(min_val, max_val)
+        print(f"First call: {val1}, Second call: {val2}")
+        # It's extremely unlikely two consecutive random floats are exactly equal
+        self.assertNotEqual(val1, val2)
+
+    def test_generate_random_int(self):
+        min_val = 1
+        max_val = 10
+        val = generate_random_int(min_val, max_val)
+        print(f"Generated random int: {val}")
+        self.assertIsInstance(val, int)
+        self.assertGreaterEqual(val, min_val)
+        self.assertLess(val, max_val)
+
+    def test_generate_random_int_array(self):
+        low = 5
+        high = 15
+        size = 10
+        arr = generate_random_int_array(low, high, size)
+        print(f"Generated random int array: {arr}")
+        self.assertIsInstance(arr, np.ndarray)
+        self.assertEqual(arr.shape[0], size)
+        self.assertTrue(np.all(arr >= low))
+        self.assertTrue(np.all(arr < high))
+
+        
 if __name__ == "__main__":
     unittest.main()

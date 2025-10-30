@@ -19,6 +19,41 @@
 # Imports
 import numpy as np
 
+## Generate random number
+def generate_random_number(min_val, max_val):
+    """
+    @brief Generate a random floating-point number between min_val and max_val.
+    @param min_val Minimum value (inclusive).
+    @param max_val Maximum value (exclusive).
+    @return Random float in [min_val, max_val).
+    """
+    rng = np.random.default_rng()  # automatically random seed
+    output = rng.uniform(min_val, max_val)
+    #print("min-max: ",min_val, "-",max_val)
+    return output
+
+## Generate random int
+def generate_random_int(min_val, max_val):
+    """
+    @brief Generate a random floating-point number between min_val and max_val.
+    @param min_val Minimum value (inclusive).
+    @param max_val Maximum value (exclusive).
+    @return Random float in [min_val, max_val).
+    """
+    return int(generate_random_number(min_val, max_val))
+
+## Generate random array of ints
+def generate_random_int_array(low, high, size=None):
+    """
+    @brief Generate a random floating-point number between min_val and max_val.
+    @param min_val Minimum value (inclusive).
+    @param max_val Maximum value (exclusive).
+    @param size Array size.
+    @return Random float in [min_val, max_val).
+    """
+    rng = np.random.default_rng()
+    return rng.integers(low, high, size=size)
+
 ## Generate random arm parameters
 
 ## Generate random environment parameters
