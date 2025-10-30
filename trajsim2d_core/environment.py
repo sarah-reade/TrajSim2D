@@ -78,9 +78,10 @@ def generate_random_objects(num_points=60,object_size=None,object_max=None,smoot
 
         #print("object_i_size: ",object_i_size)
         centre = [generate_random_number(0.1,BORDER_SIZE),generate_random_number(0.1,BORDER_SIZE)]
-
+        
         objects.append(generate_random_circle(circle_size=object_i_size,smoothness=smoothness,num_points=num_points,circle_centre=centre))
 
+    print("objects: ",objects)
     return objects
 
     
@@ -90,7 +91,7 @@ def generate_random_circle(circle_size=1, smoothness=1, num_points=200,circle_ce
     """
     @brief Generate a smooth, random circle with periodic bumps.
     """
-    if circle_centre == None:
+    if circle_centre is None:
         circle_centre = [circle_size / 2,circle_size / 2]
 
     radius = circle_size / 2
@@ -111,6 +112,7 @@ def generate_random_circle(circle_size=1, smoothness=1, num_points=200,circle_ce
     
     # Final radius
     r = radius + bumps
+    
     
     # Convert polar to Cartesian
     x = circle_centre[0] + r * np.cos(angles)
