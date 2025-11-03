@@ -44,7 +44,7 @@ def initialise_visualisation(border=None,objects=None,base_transform=None,link_w
     ## Add border
     border_id = 0
     if border is not None:
-        print("Border Type: ",type(border))
+        border_id = canvas.add_array(border)
 
     ## Add objects
     object_ids = []
@@ -53,11 +53,14 @@ def initialise_visualisation(border=None,objects=None,base_transform=None,link_w
             id = canvas.add_array(object)
             object_ids.append(id)
     
-    
+    ## Add Arm
+
+
     return canvas, border_id, object_ids
 
+# Initialise Arm
 
-## initialise objects
+
 
 # Sync visualise trajectory
 

@@ -28,7 +28,8 @@ from trajsim2d_core.visualisation import initialise_visualisation
 class TestVisualisation(unittest.TestCase):
     def test_initialise_visualisation_border_user_confirm(self):
         # Generate a random bumpy border for testing
-        border = generate_random_border(border_size=5, smoothness=0.7)
+        border = generate_random_border(border_size=5, smoothness=0.5)
+
         # Initialise the visualisation
         canvas, border_id, object_ids  = initialise_visualisation(border)
         
@@ -40,7 +41,7 @@ class TestVisualisation(unittest.TestCase):
 
     def test_initialise_visualisation_objects_user_confirm(self):
         # Generate a random bumpy border for testing
-        objects = generate_random_objects(object_size=0.5,num_objects=5)
+        objects = generate_random_objects(object_size=0.5,num_objects=5,smoothness=0.5)
         # Initialise the visualisation
         canvas, border_id, object_ids  = initialise_visualisation(objects=objects)
         

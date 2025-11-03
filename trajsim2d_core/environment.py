@@ -36,6 +36,10 @@ BORDER_CENTRE = BORDER_SIZE/2
 def generate_random_border(border_size=BORDER_SIZE, smoothness=1, num_points=200):
     """
     @brief Generate a smooth, random circular border with periodic bumps.
+    @param border_size Approximate diameter of the border; border is centered at border_size/2.
+    @param smoothness Float in [0,1]; 1 = perfect circle, 0 = maximum bumps.
+    @param num_points Number of points along the border.
+    @return Nx2 np.ndarray of (x, y) coordinates defining the border.
     """
     
     BORDER_SIZE = border_size
@@ -46,6 +50,12 @@ def generate_random_border(border_size=BORDER_SIZE, smoothness=1, num_points=200
 def generate_random_objects(num_points=60,object_size=None,object_max=None,smoothness=None,num_objects=None):
     """
     @brief Generate a smooth, random circular object with periodic bumps.
+    @param num_points Number of points per object.
+    @param object_size Fixed size for each object (optional).
+    @param object_max Maximum size allowed for objects (optional).
+    @param smoothness Float [0,1] controlling bump smoothness (optional).
+    @param num_objects Number of objects to generate (optional).
+    @return List of Nx2 np.ndarrays, each representing a single object's coordinates.
     """
     objects = []
     
@@ -81,7 +91,7 @@ def generate_random_objects(num_points=60,object_size=None,object_max=None,smoot
         
         objects.append(generate_random_circle(circle_size=object_i_size,smoothness=smoothness,num_points=num_points,circle_centre=centre))
 
-    print("objects: ",objects)
+    #print("objects: ",objects)
     return objects
 
     
@@ -90,7 +100,13 @@ def generate_random_objects(num_points=60,object_size=None,object_max=None,smoot
 def generate_random_circle(circle_size=1, smoothness=1, num_points=200,circle_centre=None):
     """
     @brief Generate a smooth, random circle with periodic bumps.
+    @param circle_size Diameter of the circle.
+    @param smoothness Float in [0,1]; 1 = perfect circle, 0 = maximum bumps.
+    @param num_points Number of points along the circle perimeter.
+    @param circle_centre Optional 2-element list or array specifying the circle center. Defaults to [circle_size/2, circle_size/2].
+    @return Nx2 np.ndarray of (x, y) coordinates defining the circle.
     """
+
     if circle_centre is None:
         circle_centre = [circle_size / 2,circle_size / 2]
 
@@ -99,12 +115,12 @@ def generate_random_circle(circle_size=1, smoothness=1, num_points=200,circle_ce
     angles = np.linspace(0, 2*np.pi, num_points, endpoint=False)
     
     # Random bumps
-
     max_bump = radius * (1 - smoothness)
-    bumps = np.abs(generate_random_int_array(10,num_points,num_points)) * max_bump
+    bumps = np.abs(generate_random_int_array(-1,1,num_points)) * max_bump
+    print(bumps)
     
     # Circular Gaussian smoothing (wrap mode)
-    sigma = num_points / 60
+    sigma = max(min(num_points / 30, num_points - 1), 1e-6)
     #print("bumps: ",bumps)
     #print("sigma: ",sigma)
     #print("num_points",num_points)
@@ -119,3 +135,34 @@ def generate_random_circle(circle_size=1, smoothness=1, num_points=200,circle_ce
     y = circle_centre[1] + r * np.sin(angles)
     
     return np.column_stack((x, y))
+
+## Generate Random edge Point
+def generate_random_edge_point(border=None,objects=None):
+    """
+    @brief Generate a random point along a given border or object for attachment.
+    @details Also returns the clockwise angle (from the y-axis) that is tangential to the object.
+             For borders, the tangential vector faces inward; for objects, it faces outward.
+    @param border Nx2 np.ndarray representing a border (optional).
+    @param objects List of Nx2 np.ndarrays representing objects (optional).
+    @return Tuple (point, angle) where:
+            - point is a 2-element np.ndarray with the coordinates of the chosen edge point.
+            - angle is a float, the clockwise angle from the positive y-axis of the tangential direction.
+    """
+
+    ## logic to decide to use objects or border
+    use_border_flag = True
+    if border is None and objects is None:
+        return None
+    elif border is not None and objects is not None:
+        use_border_flag = generate_random_int(0,1)
+    elif border is None:
+        use_border_flag = False
+
+    ## border use
+    if use_border_flag:
+        return
+    
+    ## decide on an object
+
+    ## 
+    return
