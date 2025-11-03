@@ -26,7 +26,7 @@
 # Imports
 import numpy as np
 from scipy.ndimage import gaussian_filter1d  # smoother hills
-from trajsim2d_core.utils import generate_random_number,generate_random_int,generate_random_int_array
+from trajsim2d_core.utils import generate_random_number,generate_random_int,generate_random_int_array,get_random_array_from_list,get_random_coordinate, tangent_angle_at_point
 
 # Initialise environment
 BORDER_SIZE = 5
@@ -160,9 +160,23 @@ def generate_random_edge_point(border=None,objects=None):
 
     ## border use
     if use_border_flag:
-        return
-    
-    ## decide on an object
+        # get a random point
+        point, idx = get_random_coordinate(border)
+        # calculate the angle
+        angle = tangent_angle_at_point(border,idx)
 
-    ## 
-    return
+        return point, angle
+        
+    ## decide on an object
+    object = get_random_array_from_list(objects)
+    # get a random point
+    point, idx = get_random_coordinate(object)
+
+    # calculate the angle
+    angle = tangent_angle_at_point(object,idx)
+
+    return point, angle
+
+# Get a random element in a np.ndarray or list
+def get_random_element(array):
+    return array[generate_random_int(0,len(array)-1)]

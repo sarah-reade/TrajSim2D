@@ -73,3 +73,75 @@ def calc_array_diff(array):
     diff = np.diff(data)
     # Return same type as input
     return diff.tolist() if isinstance(array, list) else diff
+
+
+def get_random_element(array):
+    """
+    @brief Select a random element from a 1D list or 1D np.ndarray.
+    @param array 1D list or np.ndarray.
+    @return Random element from the array/list.
+    """
+    if isinstance(array, np.ndarray):
+        length = array.size
+    else:
+        length = len(array)
+    idx = generate_random_int(0, length - 1)
+    return array[idx]
+
+
+def get_random_coordinate(array2d):
+    """
+    @brief Select a random row from a 2D np.ndarray.
+    @param array2d NxM np.ndarray, each row is a coordinate.
+    @return 1D np.ndarray of length M representing a randomly chosen coordinate.
+    """
+    import numpy as np
+
+    if isinstance(array2d, list):
+        array2d = np.array(array2d)
+
+    if array2d.ndim != 2:
+        raise ValueError(f"Expected a 2D array, got shape {array2d.shape}")
+
+    idx = generate_random_int(0, array2d.shape[0] - 1)
+    return array2d[idx], idx
+
+
+def get_random_array_from_list(array_list):
+    """
+    @brief Select a random np.ndarray from a list of arrays.
+    @param array_list List of np.ndarray objects.
+    @return Randomly selected np.ndarray from the list.
+    """
+    if not array_list:
+        raise ValueError("Input list is empty")
+    idx = generate_random_int(0, len(array_list) - 1)
+    return array_list[idx]
+
+def tangent_angle_at_point(array, idx):
+    """
+    @brief Compute a tangent angle at a point by averaging previous->current and current->next gradients.
+    @param array Nx2 np.ndarray of coordinates (assumed ordered along curve).
+    @param idx Index of the point of interest.
+    @return angle Angle in radians measured clockwise from the positive y-axis.
+    """
+    N = array.shape[0]
+
+    # Wrap indices for closed curve
+    prev_idx = (idx - 1) % N
+    next_idx = (idx + 1) % N
+
+    p_prev = array[prev_idx]
+    p_curr = array[idx]
+    p_next = array[next_idx]
+
+    # Vectors: prev->current and current->next
+    v1 = p_curr - p_prev
+    v2 = p_next - p_curr
+
+    # Average vector
+    tangent_vector = (v1 + v2) / 2
+
+    # Angle from positive y-axis (clockwise)
+    angle = np.arctan2(tangent_vector[0], tangent_vector[1])
+    return angle
