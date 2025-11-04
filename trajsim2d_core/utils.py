@@ -20,16 +20,16 @@
 import numpy as np
 
 ## Generate random number
-def generate_random_number(min_val, max_val):
+def generate_random_number(min_val, max_val, size=None):
     """
-    @brief Generate a random floating-point number between min_val and max_val.
+    @brief Generate one or more random floating-point numbers between min_val and max_val.
     @param min_val Minimum value (inclusive).
     @param max_val Maximum value (exclusive).
-    @return Random float in [min_val, max_val).
+    @param size Number of random values to generate. If None, returns a single float.
+    @return Single float if size is None, otherwise np.ndarray of random floats.
     """
-    rng = np.random.default_rng()  # automatically random seed
-    output = rng.uniform(min_val, max_val)
-    #print("min-max: ",min_val, "-",max_val)
+    rng = np.random.default_rng()  # auto-seeded with system entropy
+    output = rng.uniform(min_val, max_val, size=size)
     return output
 
 ## Generate random int
@@ -145,3 +145,23 @@ def tangent_angle_at_point(array, idx):
     # Angle from positive y-axis (clockwise)
     angle = np.arctan2(tangent_vector[0], tangent_vector[1])
     return angle
+
+
+
+def make_transform_2d(tx=0.0, ty=0.0, theta=0.0):
+    """
+    @brief Create a 2D transformation matrix combining rotation and translation.
+    @details The transform first applies rotation (about the origin),
+             then translation, in homogeneous coordinates.
+    @param tx Translation along x-axis.
+    @param ty Translation along y-axis.
+    @param theta Rotation angle in radians (counter-clockwise).
+    @return 3x3 np.ndarray representing the combined transform.
+    """
+    c, s = np.cos(theta), np.sin(theta)
+    transform = np.array([
+        [c, -s, tx],
+        [s,  c, ty],
+        [0,  0, 1]
+    ])
+    return transform

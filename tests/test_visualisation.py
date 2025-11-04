@@ -51,5 +51,8 @@ class TestVisualisation(unittest.TestCase):
         # Pass/fail based on user input
         self.assertIn(user_input, ['y', 'yes'], msg="User indicated the border is not correct.")
 
+    ##def test_initialise_arm(self):
+
+
 if __name__ == "__main__":
     unittest.main()

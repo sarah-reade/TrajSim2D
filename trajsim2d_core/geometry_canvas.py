@@ -87,7 +87,7 @@ class GeometryCanvas:
         Initializes a matplotlib figure and axis for drawing. 
         Also enables interactive mode for live updates.
         """
-        self.fig, self.ax = plt.subplots()
+        self.fig, self.ax = plt.subplots(figsize=(8, 8))
         self.shapes = {}  # Dictionary mapping UUID -> patch or image
         self.ax.set_aspect('equal', adjustable='datalim')
         self.ax.autoscale(enable=True, tight=True)
