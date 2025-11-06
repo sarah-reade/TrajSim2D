@@ -22,36 +22,52 @@ from matplotlib.patches import Polygon
 
 from trajsim2d_core.environment import generate_random_border, generate_random_objects
 from trajsim2d_core.visualisation import initialise_visualisation
+from trajsim2d_core.twodmanip import PlanarManipulator
 
 
 
 class TestVisualisation(unittest.TestCase):
-    def test_initialise_visualisation_border_user_confirm(self):
+    # def test_initialise_visualisation_border_user_confirm(self):
+    #     # Generate a random bumpy border for testing
+    #     border = generate_random_border(border_size=5, smoothness=0.5)
+
+    #     # Initialise the visualisation
+    #     canvas, border_id, object_ids, arm_ids  = initialise_visualisation(border)
+        
+    #     # Ask the user for confirmation
+    #     user_input = input("Do you see the border correctly? (y/n): ").strip().lower()
+        
+    #     # Pass/fail based on user input
+    #     self.assertIn(user_input, ['y', 'yes'], msg="User indicated the border is not correct.")
+
+    # def test_initialise_visualisation_objects_user_confirm(self):
+    #     # Generate a random bumpy objects for testing
+    #     objs = generate_random_objects(object_size=0.5,num_objs=5,smoothness=0.5)
+    #     # Initialise the visualisation
+    #     canvas, border_id, object_ids, arm_ids  = initialise_visualisation(objs=objs)
+        
+    #     # Ask the user for confirmation
+    #     user_input = input("Do you see the objects correctly? (y/n): ").strip().lower()
+        
+    #     # Pass/fail based on user input
+    #     self.assertIn(user_input, ['y', 'yes'], msg="User indicated the border is not correct.")
+
+    def test_initialise_visualisation_arm_user_confirm(self):
         # Generate a random bumpy border for testing
-        border = generate_random_border(border_size=5, smoothness=0.5)
+        border = generate_random_border(border_size=20, smoothness=0.5)
+        # Generate a random bumpy objects for testing
+        objs = generate_random_objects(object_size=0.5,num_objs=20,smoothness=0.5)
+        # Generate a random arm for testing
+        arm = PlanarManipulator()
 
         # Initialise the visualisation
-        canvas, border_id, object_ids  = initialise_visualisation(border)
+        canvas, border_id, object_ids, arm_ids  = initialise_visualisation(border=border,objs=objs,arm=arm)
         
         # Ask the user for confirmation
-        user_input = input("Do you see the border correctly? (y/n): ").strip().lower()
+        user_input = input("Do you see the objects and arm correctly? (y/n): ").strip().lower()
         
         # Pass/fail based on user input
         self.assertIn(user_input, ['y', 'yes'], msg="User indicated the border is not correct.")
-
-    def test_initialise_visualisation_objects_user_confirm(self):
-        # Generate a random bumpy border for testing
-        objects = generate_random_objects(object_size=0.5,num_objects=5,smoothness=0.5)
-        # Initialise the visualisation
-        canvas, border_id, object_ids  = initialise_visualisation(objects=objects)
-        
-        # Ask the user for confirmation
-        user_input = input("Do you see the objects correctly? (y/n): ").strip().lower()
-        
-        # Pass/fail based on user input
-        self.assertIn(user_input, ['y', 'yes'], msg="User indicated the border is not correct.")
-
-    ##def test_initialise_arm(self):
 
 
 if __name__ == "__main__":

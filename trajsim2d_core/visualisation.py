@@ -26,16 +26,17 @@
 
 # Imports
 from trajsim2d_core.geometry_canvas import GeometryCanvas
-from trajsim2d_core.utils import generate_random_arm, make_transform_2d, generate_random_number
+from trajsim2d_core.utils import make_transform_2d, generate_random_number
 from trajsim2d_core.environment import generate_random_edge_point
+from trajsim2d_core.twodmanip import PlanarManipulator, Rectangle,Circle
 import numpy as np
 
 # Initialise visualisation 
-def initialise_visualisation(border=None,objects=None,base_transform=None,arm=None,joint_config_1=None,joint_config_2=None):
+def initialise_visualisation(border=None,objs=None,base_transform=None,arm=None,joint_config_1=None,joint_config_2=None):
     """
     @brief Initialise a 2D visualisation with a border.
     @param border Nx2 np.ndarray defining the boundary.
-    @param objects Placeholder for objects (ignored for now).
+    @param objs Placeholder for objects (ignored for now).
     @param base_transform Placeholder (ignored for now).
     @param arm 2dmanip Object.
     @param joint_config_1 Placeholder (ignored for now).
@@ -46,24 +47,23 @@ def initialise_visualisation(border=None,objects=None,base_transform=None,arm=No
     ## Add border
     border_id = 0
     if border is not None:
-        border_id = canvas.add_array(border)
+        border_id = visualise_object(canvas,border,'olive')
 
     ## Add objects
     object_ids = []
-    if objects is not None:
-        for object in objects:
-            id = canvas.add_array(object)
-            object_ids.append(id)
+    if objs is not None:
+        object_ids = visualise_object(canvas,objs,'black')
     
     ## Add Arm (if one of border and objects exist)
+    arm_ids = []
     if arm is not None:
-        visualise_arm(canvas,arm,border,objects,base_transform,joint_config_1,joint_config_2)
+        arm_ids = visualise_arm(canvas,arm,border,objs,base_transform,joint_config_1,joint_config_2)
 
 
-    return canvas, border_id, object_ids
+    return canvas, border_id, object_ids, arm_ids
 
 # Initialise Arm
-def visualise_arm(canvas,arm,border=None,objects=None,base_transform=None,joint_config_1=None,joint_config_2=None):
+def visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=None,base_transform=None,joint_config_1=None,joint_config_2=None):
     """
     @ brief adds an arm to the canvas
     """
@@ -71,18 +71,48 @@ def visualise_arm(canvas,arm,border=None,objects=None,base_transform=None,joint_
     if base_transform is None:
         base_transform = make_transform_2d() 
 
-        if border is not None or objects is not None:
-            point, angle = generate_random_edge_point(border,objects,)
+        if border is not None or objs is not None:
+            point, angle = generate_random_edge_point(border,objs)
             base_transform = make_transform_2d(point[0],point[1],angle)
 
-    ## generate arm is not defined
-    
 
     ## Generate a valid joint config
-    config_1 = generate_random_number(-np.pi,np.pi,len(link_lengths))
+    if joint_config_1 is None:
+        joint_config_1 = arm.generate_random_config(border,objs)
     
-    ## Iterate to find one that does not collide
+    if joint_config_2 is None:
+        joint_config_2 = arm.generate_random_config(border,objs)
+    
 
+    ## visualise on canvas
+    arm_geometry_1 = arm.make_arm_geometry(joint_config_1,base_transform)
+    arm_geometry_2 = arm.make_arm_geometry(joint_config_2,base_transform)
+
+    return visualise_object(canvas,arm_geometry_1,'green') + visualise_object(canvas,arm_geometry_2,'red')
+
+def visualise_object(canvas,obj,color='red', alpha=0.5):
+
+    print("Object: ", obj)
+    print("Type: ", type(obj))
+
+    if isinstance(obj,list):
+        id = []
+        for obj_ind in obj:
+            id.append(visualise_object(canvas,obj_ind,color,alpha))
+
+    elif isinstance(obj,np.ndarray):
+        id = canvas.add_array(obj,color,alpha)
+
+    elif isinstance(obj,Rectangle):
+        id = canvas.add_rectangle(obj.transform,obj.width,obj.length,color,alpha)
+
+    elif isinstance(obj,Circle):
+        id = canvas.add_circle(obj.transform,obj.radius,color,alpha)
+    
+    else:
+        return None
+
+    return id
 
 
 # Sync visualise trajectory

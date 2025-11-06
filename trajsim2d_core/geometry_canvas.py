@@ -115,30 +115,50 @@ class GeometryCanvas:
         """
         @brief Add a rectangle to the canvas.
 
-        @param xy Tuple (x, y) representing the lower-left corner of the rectangle.
+        @param xy Tuple (x, y) representing the lower-left corner of the rectangle OR 3x3 transform matrix.
         @param width Rectangle width.
         @param height Rectangle height.
         @param color Fill color of the rectangle.
         @param alpha Transparency value between 0 and 1.
         @return Unique shape identifier (UUID string).
         """
-        rect = Rectangle(xy, width, height, color=color, alpha=alpha)
-        shape_id = str(uuid.uuid4())
-        self.ax.add_patch(rect)
-        self.shapes[shape_id] = rect
-        self._refresh()
-        return shape_id
+        if isinstance(xy, np.ndarray) and xy.shape == (3, 3):
+            # rectangle corners relative to local origin
+            corners = np.array([
+                [-width / 2,  height / 2, 1],
+                [ width / 2,  height / 2, 1],
+                [ width / 2, -height / 2, 1],
+                [-width / 2, -height / 2, 1]
+            ])
+
+            # Apply full 3x3 transform
+            transformed = (xy @ corners.T).T[:, :2]
+            
+            return self.add_array(transformed, color=color, alpha=alpha)
+        else:
+            rect = Rectangle(xy, width, height, color=color, alpha=alpha)
+            shape_id = str(uuid.uuid4())
+            self.ax.add_patch(rect)
+            self.shapes[shape_id] = rect
+            self._refresh()
+            return shape_id
+
 
     def add_circle(self, center, radius, color='green', alpha=0.5):
         """
         @brief Add a circle to the canvas.
 
-        @param center Tuple (x, y) representing the circle center.
+        @param center Tuple (x, y) representing the circle center, OR 3x3 transform matrix.
         @param radius Radius of the circle.
         @param color Fill color of the circle.
         @param alpha Transparency value between 0 and 1.
         @return Unique shape identifier (UUID string).
         """
+
+        if isinstance(center, np.ndarray) and center.shape == (3, 3):
+            # Only translation matters for a circle
+            center = tuple(center[:2, 2])
+
         circ = Circle(center, radius, color=color, alpha=alpha)
         shape_id = str(uuid.uuid4())
         self.ax.add_patch(circ)

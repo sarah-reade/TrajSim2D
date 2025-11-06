@@ -47,7 +47,7 @@ def generate_random_border(border_size=BORDER_SIZE, smoothness=1, num_points=200
     return generate_random_circle(border_size,smoothness,num_points)
 
 
-def generate_random_objects(num_points=60,object_size=None,object_max=None,smoothness=None,num_objects=None):
+def generate_random_objects(num_points=60,object_size=None,object_max=None,smoothness=None,num_objs=None):
     """
     @brief Generate a smooth, random circular object with periodic bumps.
     @param num_points Number of points per object.
@@ -57,7 +57,7 @@ def generate_random_objects(num_points=60,object_size=None,object_max=None,smoot
     @param num_objects Number of objects to generate (optional).
     @return List of Nx2 np.ndarrays, each representing a single object's coordinates.
     """
-    objects = []
+    objs = []
     
     if object_size != None:
         object_max = object_size
@@ -70,12 +70,12 @@ def generate_random_objects(num_points=60,object_size=None,object_max=None,smoot
     #print("object_size: ",object_size)
     #print("object_max: ",object_max)    
 
-    if num_objects == None:
-        num_objects = generate_random_int(1,(BORDER_SIZE/object_max))
+    if num_objs == None:
+        num_objs = generate_random_int(1,(BORDER_SIZE/object_max))
     
-    #print("num_objects: ",num_objects)
+    #print("num_objs: ",num_objs)
 
-    for i in range(0,num_objects):
+    for i in range(0,num_objs):
         if smoothness == None:
             smoothness = generate_random_number(0,1)
 
@@ -89,10 +89,10 @@ def generate_random_objects(num_points=60,object_size=None,object_max=None,smoot
         #print("object_i_size: ",object_i_size)
         centre = [generate_random_number(0.1,BORDER_SIZE),generate_random_number(0.1,BORDER_SIZE)]
         
-        objects.append(generate_random_circle(circle_size=object_i_size,smoothness=smoothness,num_points=num_points,circle_centre=centre))
+        objs.append(generate_random_circle(circle_size=object_i_size,smoothness=smoothness,num_points=num_points,circle_centre=centre))
 
-    #print("objects: ",objects)
-    return objects
+    #print("objs: ",objs)
+    return objs
 
     
 
@@ -137,7 +137,7 @@ def generate_random_circle(circle_size=1, smoothness=1, num_points=200,circle_ce
     return np.column_stack((x, y))
 
 ## Generate Random edge Point
-def generate_random_edge_point(border=None,objects=None):
+def generate_random_edge_point(border=None,objs=None):
     """
     @brief Generate a random point along a given border or object for attachment.
     @details Also returns the clockwise angle (from the y-axis) that is tangential to the object.
@@ -151,9 +151,9 @@ def generate_random_edge_point(border=None,objects=None):
 
     ## logic to decide to use objects or border
     use_border_flag = True
-    if border is None and objects is None:
+    if border is None and objs is None:
         return None
-    elif border is not None and objects is not None:
+    elif border is not None and objs is not None:
         use_border_flag = generate_random_int(0,1)
     elif border is None:
         use_border_flag = False
@@ -168,7 +168,7 @@ def generate_random_edge_point(border=None,objects=None):
         return point, angle
         
     ## decide on an object
-    object = get_random_array_from_list(objects)
+    object = get_random_array_from_list(objs)
     # get a random point
     point, idx = get_random_coordinate(object)
 

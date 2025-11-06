@@ -25,6 +25,7 @@ import unittest
 import numpy as np
 import matplotlib.pyplot as plt
 from trajsim2d_core.geometry_canvas import GeometryCanvas
+from matplotlib.patches import Rectangle, Circle
 
 class TestGeometryCanvasVisual(unittest.TestCase):
     """ @class TestGeometryCanvasVisual
@@ -86,5 +87,39 @@ class TestGeometryCanvasVisual(unittest.TestCase):
         print("Visual unittest complete. Close the window to exit.")
         plt.show(block=True)
 
+    def test_add_rectangle_with_transform(self):
+        """Test adding a rectangle using a 3×3 homogeneous transform."""
+        angle = np.pi / 4
+        cos_a, sin_a = np.cos(angle), np.sin(angle)
+        tf = np.array([
+            [cos_a, -sin_a, 2.0],
+            [sin_a,  cos_a, 3.0],
+            [0, 0, 1]
+        ])
+
+        shape_id = self.canvas.add_rectangle(tf, 2, 1, color='blue', alpha=0.7)
+        self.assertIsInstance(shape_id, str)
+        self.assertIn(shape_id, self.canvas.shapes)
+
+        self.pause()
+
+    def test_add_circle_with_transform(self):
+        """Test adding a circle using a 3×3 transform matrix (translation only)."""
+        tf = np.array([
+            [1, 0, 5.0],
+            [0, 1, 6.0],
+            [0, 0, 1]
+        ])
+
+        shape_id = self.canvas.add_circle(tf, 2.0, color='purple', alpha=0.8)
+        self.assertIn(shape_id, self.canvas.shapes)
+
+        circ = self.canvas.shapes[shape_id]
+        self.assertIsInstance(circ, Circle)
+        self.assertAlmostEqual(circ.center[0], 5.0)
+        self.assertAlmostEqual(circ.center[1], 6.0)
+        self.assertAlmostEqual(circ.get_radius(), 2.0)
+
+        self.pause()
 if __name__ == "__main__":
     unittest.main()
