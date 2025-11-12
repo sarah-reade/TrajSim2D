@@ -40,7 +40,11 @@ def generate_random_int(min_val, max_val):
     @param max_val Maximum value (exclusive).
     @return Random float in [min_val, max_val).
     """
-    return int(generate_random_number(min_val, max_val))
+    val = generate_random_number(min_val, max_val)
+    print("val:", val)
+    int_val = np.rint(val).astype(int)
+    print("int_val:", int_val)
+    return int_val
 
 ## Generate random array of ints
 def generate_random_int_array(low, high, size=None):
@@ -125,6 +129,7 @@ def tangent_angle_at_point(array, idx):
     @param idx Index of the point of interest.
     @return angle Angle in radians measured clockwise from the positive y-axis.
     """
+    
     N = array.shape[0]
 
     # Wrap indices for closed curve
@@ -134,6 +139,9 @@ def tangent_angle_at_point(array, idx):
     p_prev = array[prev_idx]
     p_curr = array[idx]
     p_next = array[next_idx]
+    print("p_prev:",p_prev)
+    print("p_curr:",p_curr)
+    print("p_next:",p_next)
 
     # Vectors: prev->current and current->next
     v1 = p_curr - p_prev
@@ -144,8 +152,33 @@ def tangent_angle_at_point(array, idx):
 
     # Angle from positive y-axis (clockwise)
     angle = np.arctan2(tangent_vector[0], tangent_vector[1])
+    print("angle:",angle)
     return angle
 
+
+def normal_angle_at_point(array, idx):
+    """
+    @brief Compute the outward normal angle at a point on a closed 2D curve.
+    @param array Nx2 np.ndarray of coordinates (assumed ordered along a closed curve).
+    @param idx Index of the point of interest.
+    @return normal_angle Angle in radians (clockwise from +Y) of the outward normal.
+    @details
+    The outward normal is computed by rotating the tangent by ±90° depending on
+    the contour winding direction:
+      - For CCW contours, the outward normal is tangent - π/2.
+      - For CW contours, the outward normal is tangent + π/2.
+    """
+    tangent = tangent_angle_at_point(array, idx)
+
+    # Determine winding (shoelace area)
+    area = 0.5 * np.sum(array[:-1, 0] * array[1:, 1] - array[1:, 0] * array[:-1, 1])
+
+    if area > 0:  # CCW contour
+        normal = tangent - np.pi / 2
+    else:          # CW contour
+        normal = tangent + np.pi / 2
+
+    return normal % (2 * np.pi)
 
 
 def make_transform_2d(tx=0.0, ty=0.0, theta=0.0):
