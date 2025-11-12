@@ -168,13 +168,18 @@ class PlanarManipulator:
             s_i = np.sin(config[i])
 
             # Local transform for this joint
-            temp_tf = np.array([
-                [c_i, -s_i, self.link_lengths[i]],
-                [s_i,  c_i, 0],
+            rot_tf = np.array([
+                [c_i,  s_i, 0],
+                [-s_i,  c_i, 0],
                 [0,    0,   1]
             ])
+            trans_tf = np.array([
+                [1, 0, 0],
+                [0, 1, self.link_lengths[i]],
+                [0, 0, 1]
+            ])
 
-            joint_tf =  np.dot(tfs[i],temp_tf)
+            joint_tf = np.dot(tfs[i], np.dot(rot_tf, trans_tf))
             tfs.append(joint_tf)
         
         return tfs
@@ -229,16 +234,16 @@ class PlanarManipulator:
         """
         # base rectangle
         rectangles = [Rectangle(
-            self.base_offset - self.joint_radius,
             self.link_width,
+            self.base_offset - self.joint_radius,
             link_tfs[0]
         )]
 
         # link rectangles
         rectangles += [
             Rectangle(
-                self.link_lengths[i] - 2 * self.joint_radius,
                 self.link_width,
+                self.link_lengths[i] - 2 * self.joint_radius,
                 tf
             )
             for i, tf in enumerate(link_tfs[1:])  # enumerate for i

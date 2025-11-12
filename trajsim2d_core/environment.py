@@ -29,7 +29,9 @@ from scipy.ndimage import gaussian_filter1d  # smoother hills
 from trajsim2d_core.utils import generate_random_number,generate_random_int,generate_random_int_array,get_random_array_from_list,get_random_coordinate, tangent_angle_at_point
 
 # Initialise environment
+global BORDER_SIZE 
 BORDER_SIZE = 5
+global BORDER_CENTRE 
 BORDER_CENTRE = BORDER_SIZE/2
 
 ## Generate random border
@@ -42,12 +44,15 @@ def generate_random_border(border_size=BORDER_SIZE, smoothness=1, num_points=200
     @return Nx2 np.ndarray of (x, y) coordinates defining the border.
     """
     
+    global BORDER_SIZE 
     BORDER_SIZE = border_size
+    global BORDER_CENTRE
     BORDER_CENTRE = border_size/2
+    print("BORDER_SIZE: ",BORDER_SIZE)
     return generate_random_circle(border_size,smoothness,num_points)
 
 
-def generate_random_objects(num_points=60,object_size=None,object_max=None,smoothness=None,num_objs=None):
+def generate_random_objects(num_points=60,object_size=None,object_max=None,smoothness=None,num_objs=None,border_size=None):
     """
     @brief Generate a smooth, random circular object with periodic bumps.
     @param num_points Number of points per object.
@@ -59,19 +64,23 @@ def generate_random_objects(num_points=60,object_size=None,object_max=None,smoot
     """
     objs = []
     
+    global BORDER_SIZE
+    if border_size == None:
+        border_size = BORDER_SIZE
+
     if object_size != None:
         object_max = object_size
     
-        
+
     elif object_max == None:
-        object_max = generate_random_number(0,BORDER_SIZE/4)
+        object_max = generate_random_number(0,border_size/4)
     
     
     #print("object_size: ",object_size)
     #print("object_max: ",object_max)    
 
     if num_objs == None:
-        num_objs = generate_random_int(1,(BORDER_SIZE/object_max))
+        num_objs = generate_random_int(1,(border_size/object_max))
     
     #print("num_objs: ",num_objs)
 
@@ -87,7 +96,9 @@ def generate_random_objects(num_points=60,object_size=None,object_max=None,smoot
             object_i_size = object_size
 
         #print("object_i_size: ",object_i_size)
-        centre = [generate_random_number(0.1,BORDER_SIZE),generate_random_number(0.1,BORDER_SIZE)]
+        print("BORDER_SIZE: ",BORDER_SIZE)
+        centre = [generate_random_number(0.1,border_size),generate_random_number(0.1,border_size)]
+        print("Centre: ",centre)
         
         objs.append(generate_random_circle(circle_size=object_i_size,smoothness=smoothness,num_points=num_points,circle_centre=centre))
 

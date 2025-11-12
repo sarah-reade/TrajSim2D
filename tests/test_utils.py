@@ -68,7 +68,7 @@ class TestGenerateRandomNumber(unittest.TestCase):
 
     def test_multiple_calls(self):
         min_val = 0.0
-        max_val = 10.0
+        max_val = 20.0
         val1 = generate_random_number(min_val, max_val)
         val2 = generate_random_number(min_val, max_val)
         print(f"First call: {val1}, Second call: {val2}")
