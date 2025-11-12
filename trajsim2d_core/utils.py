@@ -121,7 +121,7 @@ def get_random_array_from_list(array_list):
 
 def tangent_angle_at_point(array, idx):
     """
-    @brief Compute a tangent angle at a point by averaging previous->current and current->next gradients.
+    @brief Compute a tangent angle at a point.
     @param array Nx2 np.ndarray of coordinates (assumed ordered along curve).
     @param idx Index of the point of interest.
     @return angle Angle in radians measured clockwise from the positive y-axis.
@@ -140,15 +140,11 @@ def tangent_angle_at_point(array, idx):
     print("p_curr:",p_curr)
     print("p_next:",p_next)
 
-    # Vectors: prev->current and current->next
-    v1 = p_curr - p_prev
-    v2 = p_next - p_curr
+    # Vector: prev->next
+    v = p_next - p_prev
 
-    # Average vector
-    tangent_vector = (v1 + v2) / 2
-
-    # Angle from positive y-axis (clockwise)
-    angle = np.arctan2(tangent_vector[0], tangent_vector[1])
+    # Angle y/x
+    angle = np.arctan2(v[1], v[0])
     print("angle:",angle)
     return angle
 

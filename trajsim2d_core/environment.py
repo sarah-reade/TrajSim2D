@@ -26,7 +26,7 @@
 # Imports
 import numpy as np
 from scipy.ndimage import gaussian_filter1d  # smoother hills
-from trajsim2d_core.utils import generate_random_number,generate_random_int,generate_random_int_array,get_random_array_from_list,get_random_coordinate, normal_angle_at_point
+from trajsim2d_core.utils import generate_random_number,generate_random_int,generate_random_int_array,get_random_array_from_list,get_random_coordinate, normal_angle_at_point,tangent_angle_at_point
 from trajsim2d_core.collision import detect_shapes_bounded
 
 # Initialise environment
@@ -182,7 +182,7 @@ def generate_random_edge_point(border=None,objs=None):
         point, idx = get_random_coordinate(border)
         #print("point",point)
         # calculate the angle
-        angle = normal_angle_at_point(border,idx)
+        angle = tangent_angle_at_point(border,idx)
 
         return point, angle
         
@@ -193,7 +193,8 @@ def generate_random_edge_point(border=None,objs=None):
     #print("point",point)
 
     # calculate the angle
-    angle = normal_angle_at_point(object,idx)
+    angle = tangent_angle_at_point(object,idx)
+    angle = angle-np.pi
 
     return point, angle
 
