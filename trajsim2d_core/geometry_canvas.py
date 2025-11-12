@@ -58,7 +58,7 @@
 ##
 
 import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon, Rectangle, Circle
+from matplotlib.patches import Polygon, Rectangle, Circle,FancyArrowPatch
 import numpy as np
 import uuid
 
@@ -297,3 +297,60 @@ class GeometryCanvas:
         self.fig.canvas.draw_idle()
         self.fig.canvas.flush_events()
 
+    def add_tf(self, tf: np.ndarray):
+        """
+        @brief Add a 2D transform (3x3 homogeneous matrix) as a coordinate frame to the canvas.
+        
+        @param tf 3x3 np.ndarray representing a 2D homogeneous transform.
+        @return Unique shape identifier (UUID string).
+        
+        @details
+        Draws a small coordinate frame representing the transform:
+        - Red arrow: local +X direction
+        - Blue arrow: local +Y direction
+        - Black dot: transform origin
+        
+        The transform is stored internally with its UUID for later updates or removal.
+        """
+        if tf.shape != (3, 3):
+            raise ValueError("Transform must be a 3x3 homogeneous matrix")
+
+        # Extract position and orientation
+        origin = tf[:2, 2]
+        x_axis = tf[:2, 0]
+        y_axis = tf[:2, 1]
+        scale = 0.1  # visual length
+
+        # Draw coordinate axes using FancyArrowPatch
+        x_arrow = FancyArrowPatch(
+            posA=origin,
+            posB=origin + x_axis * scale,
+            color='r',
+            arrowstyle='->',
+            mutation_scale=10
+        )
+        y_arrow = FancyArrowPatch(
+            posA=origin,
+            posB=origin + y_axis * scale,
+            color='b',
+            arrowstyle='->',
+            mutation_scale=10
+        )
+
+        # Add to axes
+        self.ax.add_patch(x_arrow)
+        self.ax.add_patch(y_arrow)
+        origin_dot, = self.ax.plot(origin[0], origin[1], 'ko', markersize=3)
+
+        # Register object
+        tf_id = str(uuid.uuid4())
+        self.shapes[tf_id] = {
+            'origin': origin_dot,
+            'x_arrow': x_arrow,
+            'y_arrow': y_arrow,
+            'tf': tf
+        }
+
+        # Refresh canvas
+        self._refresh()
+        return tf_id

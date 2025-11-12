@@ -57,8 +57,8 @@ def initialise_visualisation(border=None,objs=None,base_transform=None,arm=None,
     ## Add Arm (if one of border and objects exist)
     arm_ids = []
     if arm is not None:
-        arm_ids = visualise_arm(canvas,arm,border,objs,base_transform,joint_config_1,joint_config_2)
-
+        arm_ids, base_transform = visualise_arm(canvas,arm,border,objs,base_transform,joint_config_1,joint_config_2)
+        base_id = canvas.add_tf(base_transform)
 
     return canvas, border_id, object_ids, arm_ids
 
@@ -88,12 +88,9 @@ def visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=None,base_tran
     arm_geometry_1 = arm.make_arm_geometry(joint_config_1,base_transform)
     arm_geometry_2 = arm.make_arm_geometry(joint_config_2,base_transform)
 
-    return visualise_object(canvas,arm_geometry_1,'green') + visualise_object(canvas,arm_geometry_2,'red')
+    return visualise_object(canvas,arm_geometry_1,'green') + visualise_object(canvas,arm_geometry_2,'red'),base_transform
 
 def visualise_object(canvas,obj,color='red', alpha=0.5):
-
-    print("Object: ", obj)
-    print("Type: ", type(obj))
 
     if isinstance(obj,list):
         id = []
