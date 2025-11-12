@@ -37,7 +37,7 @@ class PlanarManipulator:
     when none are provided by the user.
     """
 
-    def __init__(self, base_tf=None, base_offset= None, link_width=None, link_lengths=None, joint_radius=None):
+    def __init__(self, base_tf=None, base_offset= None, link_width=None, link_lengths=None, joint_radius=None, n=None):
         """
         @brief Initialize a planar manipulator.
         @param link_width (float or np.ndarray) Width or widths of the manipulator links.
@@ -49,7 +49,7 @@ class PlanarManipulator:
         """
         
         if link_width is None or link_lengths is None or joint_radius:
-            self.base_offset,self.link_width,self.link_lengths,self.joint_radius = self.generate_random_arm(base_offset,link_width,link_lengths,joint_radius)
+            self.base_offset,self.link_width,self.link_lengths,self.joint_radius, self.n = self.generate_random_arm(base_offset,link_width,link_lengths,joint_radius, n)
 
         ## Calculate Joint Limits
         self.joint_limit = self.calculate_joint_limits(self.link_width,self.joint_radius)
@@ -60,7 +60,7 @@ class PlanarManipulator:
             self.base_tf = np.eye(3)
 
 
-    def generate_random_arm(self, base_offset=None,link_width=None, link_lengths=None, joint_radius=None):
+    def generate_random_arm(self, base_offset=None,link_width=None, link_lengths=None, joint_radius=None, n=None):
         """
         @brief Generate random link width and length arrays for a multi-link arm.
         @details
@@ -74,14 +74,17 @@ class PlanarManipulator:
             - link_length: np.ndarray of random lengths in range [0.1, 4.0]
             - joint_radius: float of random joint radius in range [0.01, 1.0]
         """
+        if n is None:
+            n = generate_random_int(3,6)
         if base_offset is None:
             base_offset = generate_random_number(0.0,4.0)
         if link_width is None:
             link_width = generate_random_number(0.01,0.2)
         if link_lengths is None:
-            link_lengths= generate_random_number(0.1,4,generate_random_int(2,10))
+            link_lengths= generate_random_number(0.1,1,n)
         if joint_radius is None:
             joint_radius= generate_random_number(link_width,link_width*2)
+            
 
         # Print all generated values after initialization
         # print(
@@ -91,7 +94,7 @@ class PlanarManipulator:
         #     f"joint_radius: {joint_radius}"
         # )
 
-        return base_offset, link_width, link_lengths, joint_radius
+        return base_offset, link_width, link_lengths, joint_radius, n
     
 
     def calculate_joint_limits(self,link_width,joint_radius):

@@ -54,9 +54,9 @@ class TestVisualisation(unittest.TestCase):
 
     def test_initialise_visualisation_arm_user_confirm(self):
         # Generate a random bumpy border for testing
-        border = generate_random_border(border_size=10, smoothness=0.8)
+        border = generate_random_border(border_size=10, smoothness=0.1)
         # Generate a random bumpy objects for testing
-        objs = generate_random_objects(object_size=0.5,num_objs=5,smoothness=0.3)
+        objs = generate_random_objects(object_size=0.5,num_objs=5,smoothness=0.1)
         # Generate a random arm for testing
         arm = PlanarManipulator()
 
