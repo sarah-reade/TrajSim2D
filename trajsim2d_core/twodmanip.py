@@ -194,7 +194,7 @@ class PlanarManipulator:
 
         # Add base link tf
         temp_tf = np.eye(3)
-        temp_tf[1,2] = -self.base_offset/2-self.joint_radius
+        temp_tf[1,2] = -(self.base_offset+self.joint_radius)/2
         base_link_tf = np.dot(tfs[0],temp_tf)
         link_tfs.append(base_link_tf)
 
