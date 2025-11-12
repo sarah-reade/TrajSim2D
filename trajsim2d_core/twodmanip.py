@@ -120,6 +120,7 @@ class PlanarManipulator:
         counter = 1
         while counter < attempts and self.in_collision(config,border,objs):
             config = generate_random_number(-self.joint_limit,self.joint_limit,len(self.link_lengths))
+            counter += 1
         
         return config
 

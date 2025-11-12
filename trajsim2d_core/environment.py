@@ -26,7 +26,8 @@
 # Imports
 import numpy as np
 from scipy.ndimage import gaussian_filter1d  # smoother hills
-from trajsim2d_core.utils import generate_random_number,generate_random_int,generate_random_int_array,get_random_array_from_list,get_random_coordinate, tangent_angle_at_point
+from trajsim2d_core.utils import generate_random_number,generate_random_int,generate_random_int_array,get_random_array_from_list,get_random_coordinate, normal_angle_at_point
+from trajsim2d_core.collision import detect_shapes_bounded
 
 # Initialise environment
 global BORDER_SIZE 
@@ -48,11 +49,10 @@ def generate_random_border(border_size=BORDER_SIZE, smoothness=1, num_points=200
     BORDER_SIZE = border_size
     global BORDER_CENTRE
     BORDER_CENTRE = border_size/2
-    print("BORDER_SIZE: ",BORDER_SIZE)
     return generate_random_circle(border_size,smoothness,num_points)
 
 
-def generate_random_objects(num_points=60,object_size=None,object_max=None,smoothness=None,num_objs=None,border_size=None):
+def generate_random_objects(num_points=60,object_size=None,object_max=None,smoothness=None,num_objs=None,border_size=None,attempts=100,border=None):
     """
     @brief Generate a smooth, random circular object with periodic bumps.
     @param num_points Number of points per object.
@@ -95,12 +95,19 @@ def generate_random_objects(num_points=60,object_size=None,object_max=None,smoot
         else:
             object_i_size = object_size
 
-        #print("object_i_size: ",object_i_size)
-        print("BORDER_SIZE: ",BORDER_SIZE)
         centre = [generate_random_number(0.1,border_size),generate_random_number(0.1,border_size)]
-        print("Centre: ",centre)
+        circle = generate_random_circle(circle_size=object_i_size,smoothness=smoothness,num_points=num_points,circle_centre=centre)
         
-        objs.append(generate_random_circle(circle_size=object_i_size,smoothness=smoothness,num_points=num_points,circle_centre=centre))
+        ## check that the circle is bounded
+        counter = 0
+        if border is not None:
+            while not detect_shapes_bounded(border,[circle]) and counter < attempts/num_objs:
+                centre = [generate_random_number(0.1,border_size),generate_random_number(0.1,border_size)]
+                circle = generate_random_circle(circle_size=object_i_size,smoothness=smoothness,num_points=num_points,circle_centre=centre)
+                counter += 1
+                
+        
+        objs.append(circle)
 
     #print("objs: ",objs)
     return objs
@@ -128,7 +135,7 @@ def generate_random_circle(circle_size=1, smoothness=1, num_points=200,circle_ce
     # Random bumps
     max_bump = radius * (1 - smoothness)
     bumps = np.abs(generate_random_int_array(-1,1,num_points)) * max_bump
-    print(bumps)
+    #print(bumps)
     
     # Circular Gaussian smoothing (wrap mode)
     sigma = max(min(num_points / 30, num_points - 1), 1e-6)
@@ -173,8 +180,9 @@ def generate_random_edge_point(border=None,objs=None):
     if use_border_flag:
         # get a random point
         point, idx = get_random_coordinate(border)
+        #print("point",point)
         # calculate the angle
-        angle = tangent_angle_at_point(border,idx)
+        angle = normal_angle_at_point(border,idx)
 
         return point, angle
         
@@ -182,9 +190,10 @@ def generate_random_edge_point(border=None,objs=None):
     object = get_random_array_from_list(objs)
     # get a random point
     point, idx = get_random_coordinate(object)
+    #print("point",point)
 
     # calculate the angle
-    angle = tangent_angle_at_point(object,idx)
+    angle = normal_angle_at_point(object,idx)
 
     return point, angle
 
