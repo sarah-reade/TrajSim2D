@@ -41,10 +41,7 @@ def generate_random_int(min_val, max_val):
     @return Random float in [min_val, max_val).
     """
     val = generate_random_number(min_val, max_val)
-    print("val:", val)
-    int_val = np.rint(val).astype(int)
-    print("int_val:", int_val)
-    return int_val
+    return int(np.rint(val).astype(int))
 
 ## Generate random array of ints
 def generate_random_int_array(low, high, size=None):
