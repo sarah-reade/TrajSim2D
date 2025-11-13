@@ -18,7 +18,7 @@
 
 import unittest
 import numpy as np
-from trajsim2d_core.utils import calc_array_diff, generate_random_number,generate_random_int,generate_random_int_array
+from trajsim2d_core.utils import calc_array_diff, generate_random_number,generate_random_int,generate_random_int_array, tangent_angle_at_point, normal_angle_at_point
 
 class TestCalcArrayDiff(unittest.TestCase):
 
