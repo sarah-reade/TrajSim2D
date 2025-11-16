@@ -28,7 +28,7 @@
 from trajsim2d_core.geometry_canvas import GeometryCanvas
 from trajsim2d_core.utils import make_transform_2d, generate_random_number
 from trajsim2d_core.environment import generate_random_edge_point
-from trajsim2d_core.twodmanip import PlanarManipulator, Rectangle,Circle
+from trajsim2d_core.twodmanip import PlanarManipulator
 import numpy as np
 
 # Initialise visualisation 
@@ -91,25 +91,7 @@ def visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=None,base_tran
     return visualise_object(canvas,arm_geometry_1,'green') + visualise_object(canvas,arm_geometry_2,'red'),base_transform
 
 def visualise_object(canvas,obj,color='red', alpha=0.5):
-
-    if isinstance(obj,list):
-        id = []
-        for obj_ind in obj:
-            id.append(visualise_object(canvas,obj_ind,color,alpha))
-
-    elif isinstance(obj,np.ndarray):
-        id = canvas.add_array(obj,color,alpha)
-
-    elif isinstance(obj,Rectangle):
-        id = canvas.add_rectangle(obj.transform,obj.width,obj.length,color,alpha)
-
-    elif isinstance(obj,Circle):
-        id = canvas.add_circle(obj.transform,obj.radius,color,alpha)
-    
-    else:
-        return None
-
-    return id
+    return canvas.add_shape(obj,color,alpha)
 
 
 # Sync visualise trajectory

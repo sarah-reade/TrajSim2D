@@ -18,19 +18,8 @@
 
 # Imports
 import numpy as np
+from matplotlib.patches import Polygon, Rectangle, Circle
 
-# Define Circle
-class Circle:
-    def __init__(self, radius: float, transform: np.ndarray):
-        self.radius = radius
-        self.transform = transform  # 2D transform 
-
-# Define Rectangle
-class Rectangle:
-    def __init__(self, width: float, length: float, transform=np.ndarray):
-        self.width = width
-        self.length = length
-        self.transform = transform  # 2D transform 
 
 ## Detect Collision
 def detect_collision(shape_1,shape_2):
@@ -40,7 +29,7 @@ def detect_collision(shape_1,shape_2):
     @param shape_2 is a shape to check for collisions against shape_1
     @return bool: if collision is detected
     """
-    # if either shape is np.ndarray decompose into convex shapes
+    # if either shape is np.ndarray generate a bounding box
 
     # 
 
@@ -96,5 +85,6 @@ def detect_any_collisions_bounded(boundary,shapes_1,shapes_2):
     """
 
     return detect_any_collisions(shapes_1,shapes_2) and not detect_shapes_bounded(boundary,shapes_1)
+
 
 

@@ -26,7 +26,8 @@
 # Imports
 import numpy as np
 from trajsim2d_core.utils import generate_random_number, generate_random_int    
-from trajsim2d_core.collision import detect_any_collisions_bounded, Circle,Rectangle
+from trajsim2d_core.collision import detect_any_collisions_bounded
+from matplotlib.patches import Polygon, Rectangle, Circle
 
 class PlanarManipulator:
     """

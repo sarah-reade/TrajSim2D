@@ -95,6 +95,27 @@ class GeometryCanvas:
         plt.ion()
         plt.show()
 
+    def add_shape(self,obj,color='blue',alpha=0.5):
+        print("BOOP:",obj)
+        if isinstance(obj,list):
+            id = []
+            for obj_ind in obj:
+                id.append(self.add_shape(obj_ind,color,alpha))
+
+        elif isinstance(obj,np.ndarray):
+            id = self.add_array(obj,color,alpha)
+
+        elif isinstance(obj,Rectangle):
+            id = self.add_rectangle(obj.transform,obj.width,obj.length,color,alpha)
+
+        elif isinstance(obj,Circle):
+            id = self.add_circle(obj.transform,obj.radius,color,alpha)
+        
+        else:
+            return None
+
+        return id
+
     def add_polygon(self, points, color='blue', alpha=0.5):
         """
         @brief Add a polygon to the canvas.
