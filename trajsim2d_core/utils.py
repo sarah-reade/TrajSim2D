@@ -191,3 +191,43 @@ def make_transform_2d(tx=0.0, ty=0.0, theta=0.0):
         [0,  0, 1]
     ])
     return transform
+
+def getRectAngle(tf):
+    """
+    @brief Compute the rotation angle of a rectangle from a 3x3 transform.
+    
+    @param tf 3x3 homogeneous transform matrix (world → rectangle).
+    @return Rotation angle in degrees.
+    """
+    return np.degrees(np.arctan2(tf[1, 0], tf[0, 0]))
+
+
+def getRectAnchor(tf, w, h):
+    """
+    @brief Compute the lower-left corner (anchor) of a rectangle for matplotlib.
+    
+    @param tf 3x3 homogeneous transform (world → rectangle).
+    @param w Width of the rectangle.
+    @param h Height of the rectangle.
+    @return (x, y) coordinates of the lower-left corner.
+    """
+    xc, yc = tf[0, 2], tf[1, 2]
+    theta = np.arctan2(tf[1, 0], tf[0, 0])
+    c, s = np.cos(theta), np.sin(theta)
+    x0 = xc - (w/2)*c + (h/2)*s
+    y0 = yc - (w/2)*s - (h/2)*c
+    return (x0, y0)
+
+
+def getRectRotPoint(tf, w, h):
+    """
+    @brief Get the rotation point of a rectangle for matplotlib.
+    @details In matplotlib, rotation occurs about the lower-left corner,
+             so this is the same as the anchor.
+    
+    @param tf 3x3 homogeneous transform (world → rectangle).
+    @param w Width of the rectangle.
+    @param h Height of the rectangle.
+    @return (x, y) coordinates of the rotation point.
+    """
+    return getRectAnchor(tf, w, h)

@@ -106,10 +106,10 @@ class GeometryCanvas:
             id = self.add_array(obj,color,alpha)
 
         elif isinstance(obj,Rectangle):
-            id = self.add_rectangle(obj.transform,obj.width,obj.length,color,alpha)
+            id = self.add_rectangle(obj,color,alpha)
 
         elif isinstance(obj,Circle):
-            id = self.add_circle(obj.transform,obj.radius,color,alpha)
+            id = self.add_circle(obj,color,alpha)
         
         else:
             return None
@@ -132,10 +132,11 @@ class GeometryCanvas:
         self._refresh()
         return shape_id
 
-    def add_rectangle(self, xy, width, height, color='red', alpha=0.5):
+    def add_rectangle(self, obj=None,xy=[0.0,0.0], width=0.0, height=0.0, color='red', alpha=0.5):
         """
         @brief Add a rectangle to the canvas.
 
+        @param obj representing a matplotlib rectangle
         @param xy Tuple (x, y) representing the lower-left corner of the rectangle OR 3x3 transform matrix.
         @param width Rectangle width.
         @param height Rectangle height.
@@ -143,7 +144,14 @@ class GeometryCanvas:
         @param alpha Transparency value between 0 and 1.
         @return Unique shape identifier (UUID string).
         """
-        if isinstance(xy, np.ndarray) and xy.shape == (3, 3):
+        if isinstance(obj,Rectangle):
+            shape_id = str(uuid.uuid4())
+            self.ax.add_patch(obj)
+            self.shapes[shape_id] = obj
+            self._refresh()
+            return shape_id
+        
+        elif isinstance(xy, np.ndarray) and xy.shape == (3, 3):
             # rectangle corners relative to local origin
             corners = np.array([
                 [-width / 2,  height / 2, 1],
@@ -165,7 +173,7 @@ class GeometryCanvas:
             return shape_id
 
 
-    def add_circle(self, center, radius, color='green', alpha=0.5):
+    def add_circle(self, obj=None,center=[0.0,0.0], radius=0.0, color='green', alpha=0.5):
         """
         @brief Add a circle to the canvas.
 
@@ -175,17 +183,22 @@ class GeometryCanvas:
         @param alpha Transparency value between 0 and 1.
         @return Unique shape identifier (UUID string).
         """
+        if isinstance(obj,Circle):
+            shape_id = str(uuid.uuid4())
+            self.ax.add_patch(obj)
+            self.shapes[shape_id] = obj
+            self._refresh()
 
-        if isinstance(center, np.ndarray) and center.shape == (3, 3):
+        elif isinstance(center, np.ndarray) and center.shape == (3, 3):
             # Only translation matters for a circle
             center = tuple(center[:2, 2])
 
-        circ = Circle(center, radius, color=color, alpha=alpha)
-        shape_id = str(uuid.uuid4())
-        self.ax.add_patch(circ)
-        self.shapes[shape_id] = circ
-        self._refresh()
-        return shape_id
+            circ = Circle(center, radius, color=color, alpha=alpha)
+            shape_id = str(uuid.uuid4())
+            self.ax.add_patch(circ)
+            self.shapes[shape_id] = circ
+            self._refresh()
+            return shape_id
 
     def add_array(self, arr, color='cyan', alpha=0.5, closed=True):
         """

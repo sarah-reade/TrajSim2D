@@ -25,7 +25,7 @@
 
 # Imports
 import numpy as np
-from trajsim2d_core.utils import generate_random_number, generate_random_int    
+from trajsim2d_core.utils import generate_random_number, generate_random_int , getRectAnchor, getRectRotPoint, getRectAngle   
 from trajsim2d_core.collision import detect_any_collisions_bounded
 from matplotlib.patches import Polygon, Rectangle, Circle
 
@@ -223,33 +223,36 @@ class PlanarManipulator:
         @return List of Circle objects representing each joint.
         """
 
-        return [Circle(self.joint_radius, tf) for tf in tfs[:-1]]
+        return [Circle([tf[0,2],tf[1,2]],self.joint_radius) for tf in tfs[:-1]]
 
     def make_link_rectangles(self,link_tfs):
         """
         @brief Generate Rectangle objects representing the links of the robotic arm.
 
         The base link is treated specially: its length is reduced by one joint radius
-        at one end. All other links are reduced by two joint radii to account for
+        at one end. All other links are reduced by two joint radii to account forGJK for 2D
         the joints at both ends.
 
         @param link_tfs List of 3x3 homogeneous transforms corresponding to the
                         center of each link.
         @return List of Rectangle objects representing each link.
         """
+        tf = link_tfs[0]
         # base rectangle
         rectangles = [Rectangle(
-            self.link_width,
-            self.base_offset - self.joint_radius,
-            link_tfs[0]
+            xy=getRectAnchor(tf,self.link_width,self.base_offset - self.joint_radius),
+            width=self.link_width,
+            height=self.base_offset - self.joint_radius,
+            angle=getRectAngle(tf)
         )]
 
         # link rectangles
         rectangles += [
             Rectangle(
-                self.link_width,
-                self.link_lengths[i] - 2 * self.joint_radius,
-                tf
+                xy=getRectAnchor(tf,self.link_width,self.link_lengths[i] - 2 * self.joint_radius),
+                width=self.link_width,
+                height=self.link_lengths[i] - 2 * self.joint_radius,
+                angle=getRectAngle(tf)
             )
             for i, tf in enumerate(link_tfs[1:])  # enumerate for i
         ]  
