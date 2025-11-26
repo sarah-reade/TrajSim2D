@@ -32,7 +32,7 @@ class TestVisualisation(unittest.TestCase):
     #     border = generate_random_border(border_size=5, smoothness=0.5)
 
     #     # Initialise the visualisation
-    #     canvas, border_id, object_ids, arm_ids  = initialise_visualisation(border)
+    #     canvas, base_tf, border_id, object_ids, arm_ids  = initialise_visualisation(border)
         
     #     # Ask the user for confirmation
     #     user_input = input("Do you see the border correctly? (y/n): ").strip().lower()
@@ -44,7 +44,7 @@ class TestVisualisation(unittest.TestCase):
     #     # Generate a random bumpy objects for testing
     #     objs = generate_random_objects(object_size=0.5,num_objs=5,smoothness=0.5)
     #     # Initialise the visualisation
-    #     canvas, border_id, object_ids, arm_ids  = initialise_visualisation(objs=objs)
+    #     canvas, base_tf, border_id, object_ids, arm_ids  = initialise_visualisation(objs=objs)
         
     #     # Ask the user for confirmation
     #     user_input = input("Do you see the objects correctly? (y/n): ").strip().lower()
@@ -61,7 +61,7 @@ class TestVisualisation(unittest.TestCase):
         arm = PlanarManipulator()
 
         # Initialise the visualisation
-        canvas, border_id, object_ids, arm_ids  = initialise_visualisation(border=border,objs=objs,arm=arm)
+        canvas, base_tf, border_id, object_ids, arm_ids  = initialise_visualisation(border=border,objs=objs,arm=arm)
         
         # Show the figure in blocking mode — execution will pause until the window is closed
         plt.show(block=True)

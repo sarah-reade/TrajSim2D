@@ -26,7 +26,7 @@
 # Imports
 import numpy as np
 from trajsim2d_core.utils import generate_random_number, generate_random_int , getRectAnchor, getRectRotPoint, getRectAngle   
-from trajsim2d_core.collision import detect_any_collisions_bounded
+from trajsim2d_core.collision import detect_any_collisions_bounded, detect_any_collisions_AABB
 from matplotlib.patches import Polygon, Rectangle, Circle
 
 class PlanarManipulator:
@@ -133,7 +133,8 @@ class PlanarManipulator:
         arm_geometry=self.make_arm_geometry(config)
         
         ## Check for collisions
-        if detect_any_collisions_bounded(border,arm_geometry,objs):
+        collision_flag, collision_list = detect_any_collisions_AABB(arm_geometry,objs,0.01) ## TODO: CHANGE ME
+        if collision_flag: 
             return True
 
         return False

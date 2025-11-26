@@ -21,7 +21,7 @@ for i in range(NUM_ITERATIONS):
     arm = PlanarManipulator()
 
     # --- Initialise the visualisation ---
-    canvas, border_id, object_ids, arm_ids = initialise_visualisation(border=border, objs=objs, arm=arm)
+    canvas, base_tf, border_id, object_ids, arm_ids = initialise_visualisation(border=border, objs=objs, arm=arm)
 
     # --- Save a snapshot of the current figure ---
     img_path = SAVE_DIR / f"visualisation_{i+1:03d}.png"

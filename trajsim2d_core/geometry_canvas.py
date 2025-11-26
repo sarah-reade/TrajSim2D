@@ -96,7 +96,7 @@ class GeometryCanvas:
         plt.show()
 
     def add_shape(self,obj,color='blue',alpha=0.5):
-        print("BOOP:",obj)
+        
         if isinstance(obj,list):
             id = []
             for obj_ind in obj:

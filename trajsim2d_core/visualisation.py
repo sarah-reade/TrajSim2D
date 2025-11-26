@@ -60,7 +60,7 @@ def initialise_visualisation(border=None,objs=None,base_transform=None,arm=None,
         arm_ids, base_transform = visualise_arm(canvas,arm,border,objs,base_transform,joint_config_1,joint_config_2)
         base_id = canvas.add_tf(base_transform)
 
-    return canvas, border_id, object_ids, arm_ids
+    return canvas, base_transform, border_id, object_ids, arm_ids
 
 # Initialise Arm
 def visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=None,base_transform=None,joint_config_1=None,joint_config_2=None):
