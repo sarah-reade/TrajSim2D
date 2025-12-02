@@ -39,6 +39,7 @@ def detect_collision_DISTANCE(shape_1,shape_2,intersecting_area):
     @param shape_1 is a shape to check for collisions against shape_2
     @param shape_2 is a shape to check for collisions against shape_1
     @return bool: if collision is detected
+    @return bool: distance between shapes
     """
 
 
