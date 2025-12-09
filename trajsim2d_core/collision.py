@@ -33,23 +33,89 @@ def detect_collision_AABB(shape_1,shape_2,inflation=0.1):
     return collision_flag, overlaps
 
 
-def detect_collision_DISTANCE(shape_1,shape_2,intersecting_area):
+def detect_collision_DISTANCE(shape_1,shape_2,intersecting_area=None,method='GJK'):
     """
     @brief Check for collisions between two shapes using a complex method and measuring distance between
     @param shape_1 is a shape to check for collisions against shape_2
     @param shape_2 is a shape to check for collisions against shape_1
+    @param intersecting_area is an optional area to crop the shapes to for collision detection
+    @param method is the method to use for collision detection
     @return bool: if collision is detected
     @return bool: distance between shapes
     """
 
 
-    # detect between a rectangle v rectangle
+    # detect between a circle v circle
+    if isinstance(shape_1,Circle) and isinstance(shape_2,Circle):
+        return detect_circle_collision_DISTANCE(shape_1,shape_2)
+    
 
-    # detect between a rectangle v circle
+    # convert all shapes into np.ndarray of points
+    shape_1 = convert_shape_to_numpy(shape_1)
+    shape_2 = convert_shape_to_numpy(shape_2)
 
-    # detect between a rectangle v np.ndarry
+    # crop np.ndarrays
+    if intersecting_area is not None:
+        if isinstance(shape_1,np.ndarray):
+            shape_1 = crop_shape_to_AABB(shape_1,intersecting_area)
+        if isinstance(shape_2,np.ndarray):
+            shape_2 = crop_shape_to_AABB(shape_2,intersecting_area)
 
-    return False, distance
+    
+    
+    # detect between a np.ndarray v np.ndarray
+    # Dictionary mapping method names to functions
+    methods = {
+        "GJK": gjk_distance,
+        "SAT": sat_distance,
+        "GRID": grid_distance
+    }
+
+    if method not in methods:
+        raise ValueError(f"Unknown method '{method}'")
+    
+    
+    if isinstance(shape_1,np.ndarray) and isinstance(shape_2,np.ndarray):
+        return methods[method](shape_1,shape_2)    
+    else:
+        raise NotImplementedError("Distance collision detection not implemented for these shape types.")
+
+
+def convert_shape_to_numpy(shape):
+    """
+    @brief Convert a shape to a numpy array of points.
+    @param shape is a shape to convert
+    @return np.ndarray of shape points
+    """
+    if isinstance(shape,Circle):
+        return circle_to_numpy(shape)
+    elif isinstance(shape,Rectangle):
+        return shape.get_verts()
+    elif isinstance(shape,np.ndarray):
+        return shape
+    else:
+        raise NotImplementedError("Conversion to numpy not implemented for this shape type.")
+
+
+def detect_circle_collision_DISTANCE(circle_1,circle_2):
+    """
+    @brief Check for collisions between two circles using distance method
+    @param circle_1 is a Circle to check for collisions against circle_2
+    @param circle_2 is a Circle to check for collisions against circle_1
+    @return bool: if collision is detected
+    @return bool: distance between circles
+    """
+    cx1, cy1 = circle_1.center
+    r1 = circle_1.radius
+    cx2, cy2 = circle_2.center
+    r2 = circle_2.radius
+
+    dist_centers = np.sqrt((cx2 - cx1)**2 + (cy2 - cy1)**2)
+    distance = dist_centers - (r1 + r2)
+
+    collision = distance < 0.00000000001
+
+    return collision, distance
 
 
 def detect_shapes_bounded(boundary,shapes):
@@ -299,3 +365,236 @@ def get_AABB_Overlap(shape_1,shape_2, inflation=0.0):
     )
 
     return True, overlap_bounds
+
+
+
+def crop_shape_to_AABB(shape, boundary):
+    """
+    @brief Uses the Sutherland-Hodgeman Polygon Clipping Algorithm to crop a polygonal shape to a polygonal boundary.
+    
+    This function removes points outside the boundary, adds points where
+    the shape intersects the boundary, and includes boundary points that
+    lie inside the shape. Returns a NumPy array of points representing
+    the cropped polygon.
+    
+    @param shape np.ndarray of shape (N,2): points of the polygonal shape
+    @param boundary Tuple (minx, miny, maxx, maxy)
+    
+    @return np.ndarray of points representing the cropped polygon
+    """
+    if not isinstance(shape, np.ndarray):
+        raise TypeError("Shape must be a numpy ndarray")
+    if not (isinstance(boundary, (tuple, list)) and len(boundary) == 4):
+        raise TypeError("Boundary must be a tuple (minx, miny, maxx, maxy)")
+
+    
+    cropped_shape = suthHodgClip (shape,len(shape), [
+            [boundary[0], boundary[3]],  # top-left
+            [boundary[2], boundary[3]],  # top-right
+            [boundary[2], boundary[1]],  # bottom-right
+            [boundary[0], boundary[1]]   # bottom-left
+        ],4)
+
+
+    return cropped_shape
+
+
+
+def circle_to_numpy(circle, num_points=100):
+    """
+    @brief Convert a matplotlib Circle to a NumPy array of points approximating the circle.
+    
+    @param circle matplotlib.patches.Circle object
+    @param num_points int Number of points to approximate the circle (default: 100)
+    
+    @return np.ndarray of shape (num_points, 2) representing the circle's points
+    """
+    if not isinstance(circle, Circle):
+        raise TypeError("Input must be a matplotlib.patches.Circle")
+    
+    center = circle.center
+    radius = circle.radius
+
+    theta = np.linspace(0, 2*np.pi, num_points, endpoint=False)
+    x = center[0] + radius * np.cos(theta)
+    y = center[1] + radius * np.sin(theta)
+
+    return np.stack((x, y), axis=-1)
+
+
+def point_in_polygon(point, polygon):
+    """
+    @brief Check if a point is inside a polygon using the ray-casting algorithm.
+    @param point is a np.ndarray point to check
+    @param polygon is a np.ndarray of polygon points
+    @return bool: if point is inside polygon
+    """
+    x, y = point
+    n = len(polygon)
+    inside = False
+
+    for i in range(n):
+        j = (i + 1) % n
+        xi, yi = polygon[i]
+        xj, yj = polygon[j]
+
+        # Check if the ray intersects the edge
+        intersect = ((yi > y) != (yj > y)) and \
+                    (x < (xj - xi) * (y - yi) / (yj - yi + 1e-12) + xi)
+        if intersect:
+            inside = not inside
+
+    return inside
+    
+
+#######################################################################
+#                                                                     #
+#                  GJK DISTANCE BETWEEN OBSTACLES                     #
+#                                                                     #
+#  This section implements the Gilbert-Johnson-Keerthi (GJK)          #
+#  algorithm to compute the minimum distance between two convex       #
+#  shapes or obstacles.                                               #
+#                                                                     #
+#######################################################################
+
+def gjk_distance(shape_1,shape_2):
+    """
+    @brief GJK distance algorithm between two np.ndarray shapes
+    @param shape_1 is a np.ndarray shape to check for collisions against shape_2
+    @param shape_2 is a np.ndarray shape to check for collisions against shape_1
+    @return bool: if collision is detected
+    @return float: distance between shapes
+    """
+    smallest_distance = float('inf')
+    vector_polygon = []
+
+    for p1 in shape_1:
+        for p2 in shape_2:
+            vector = p2 - p1
+            dist = np.linalg.norm(vector)
+            if dist < smallest_distance:
+                smallest_distance = dist
+            vector_polygon.append(vector)
+            
+    
+    if point_in_polygon(np.array([0.0,0.0]),np.array(vector_polygon)):
+        return True, 0.0
+    
+    return False, smallest_distance
+
+
+def sat_distance(shape_1,shape_2):
+    """
+    @brief SAT distance algorithm between two np.ndarray shapes
+    @param shape_1 is a np.ndarray shape to check for collisions against shape_2
+    @param shape_2 is a np.ndarray shape to check for collisions against shape_1
+    @return bool: if collision is detected
+    @return float: distance between shapes
+    """
+    # Placeholder implementation
+    return False, 0.0
+
+def grid_distance(shape_1,shape_2):
+    """
+    @brief GRID distance algorithm between two np.ndarray shapes
+    @param shape_1 is a np.ndarray shape to check for collisions against shape_2
+    @param shape_2 is a np.ndarray shape to check for collisions against shape_1
+    @return bool: if collision is detected
+    @return float: distance between shapes
+    """
+    # Placeholder implementation
+    return False, 0.0
+
+#######################################################################
+#                                                                     #
+#      SUTHERLAND–HODGMAN POLYGON CLIPPING ALGORITHM                  #
+#                                                                     #
+#  This section implements the Sutherland–Hodgman polygon clipping    #
+#  algorithm, adapted from the GeeksforGeeks tutorial.               #
+#                                                                     #
+#  It clips a subject polygon against a convex clipping polygon       #
+#  (e.g., an AABB), producing a new polygon consisting of only the    #
+#  points inside the clipping area.                                   #
+#                                                                     #
+#######################################################################
+
+
+# Defining maximum number of points in polygon
+MAX_POINTS = 300
+
+# Function to return x-value of point of intersection of two lines
+def x_intersect(x1, y1, x2, y2, x3, y3, x4, y4):
+    num = (x1*y2 - y1*x2) * (x3-x4) - (x1-x2) * (x3*y4 - y3*x4)
+    den = (x1-x2) * (y3-y4) - (y1-y2) * (x3-x4)
+    return num/den
+
+# Function to return y-value of point of intersection of two lines
+def y_intersect(x1, y1, x2, y2, x3, y3, x4, y4):
+    num = (x1*y2 - y1*x2) * (y3-y4) - (y1-y2) * (x3*y4 - y3*x4)
+    den = (x1-x2) * (y3-y4) - (y1-y2) * (x3-x4)
+    return num/den
+
+# Function to clip all the edges w.r.t one clip edge of clipping area
+def clip(poly_points, poly_size, x1, y1, x2, y2):
+    new_points = np.zeros((MAX_POINTS, 2), dtype=float)
+    new_poly_size = 0
+
+    # (ix,iy),(kx,ky) are the co-ordinate values of the points
+    for i in range(poly_size):
+        # i and k form a line in polygon
+        k = (i+1) % poly_size
+        ix, iy = poly_points[i]
+        kx, ky = poly_points[k]
+
+        # Calculating position of first point w.r.t. clipper line
+        i_pos = (x2-x1) * (iy-y1) - (y2-y1) * (ix-x1)
+
+        # Calculating position of second point w.r.t. clipper line
+        k_pos = (x2-x1) * (ky-y1) - (y2-y1) * (kx-x1)
+
+        # Case 1 : When both points are inside
+        if i_pos < 0 and k_pos < 0:
+            # Only second point is added
+            new_points[new_poly_size] = [kx, ky]
+            new_poly_size += 1
+
+        # Case 2: When only first point is outside
+        elif i_pos >= 0 and k_pos < 0:
+            # Point of intersection with edge and the second point is added
+            new_points[new_poly_size] = [x_intersect(x1, y1, x2, y2, ix, iy, kx, ky),
+                                         y_intersect(x1, y1, x2, y2, ix, iy, kx, ky)]
+            new_poly_size += 1
+            new_points[new_poly_size] = [kx, ky]
+            new_poly_size += 1
+
+        # Case 3: When only second point is outside
+        elif i_pos < 0 and k_pos >= 0:
+            # Only point of intersection with edge is added
+            new_points[new_poly_size] = [x_intersect(x1, y1, x2, y2, ix, iy, kx, ky),
+                                         y_intersect(x1, y1, x2, y2, ix, iy, kx, ky)]
+            new_poly_size += 1
+
+        # Case 4: When both points are outside
+        else:
+            pass  # No points are added, but we add a pass statement to avoid the IndentationError
+
+    # Copying new points into a separate array and changing the no. of vertices
+    clipped_poly_points = np.zeros((new_poly_size, 2), dtype=float)
+    for i in range(new_poly_size):
+        clipped_poly_points[i] = new_points[i]
+
+    return clipped_poly_points, new_poly_size
+
+# Function to implement Sutherland–Hodgman algorithm
+def suthHodgClip(poly_points, poly_size, clipper_points, clipper_size):
+    # i and k are two consecutive indexes
+    for i in range(clipper_size):
+        k = (i+1) % clipper_size
+
+        # We pass the current array of vertices, it's size and the end points of the selected clipper line
+        poly_points, poly_size = clip(poly_points, poly_size, clipper_points[i][0],
+                                      clipper_points[i][1], clipper_points[k][0],
+                                      clipper_points[k][1])
+
+
+    return poly_points[:poly_size]
