@@ -136,16 +136,16 @@ def tangent_angle_at_point(array, idx):
     p_prev = array[prev_idx]
     p_curr = array[idx]
     p_next = array[next_idx]
-    print("p_prev:",p_prev)
-    print("p_curr:",p_curr)
-    print("p_next:",p_next)
+    #print("p_prev:",p_prev)
+    #print("p_curr:",p_curr)
+    #print("p_next:",p_next)
 
     # Vector: prev->next
     v = p_next - p_prev
 
     # Angle y/x
     angle = np.arctan2(v[1], v[0])
-    print("angle:",angle)
+    #print("angle:",angle)
     return angle
 
 

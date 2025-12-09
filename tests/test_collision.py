@@ -43,6 +43,7 @@ class TestCollisionDetection(unittest.TestCase):
     border_id = None
     object_ids = None
     arm_ids = None
+    temp_shapes = None
 
     # ----------------------------------------------
 
@@ -94,9 +95,9 @@ class TestCollisionDetection(unittest.TestCase):
                This test should ONLY display a cropped shape.
         """
 
-        for shape in self.temp_shapes:
+        for shape in self.__class__.temp_shapes:
             self.canvas.remove_shape(shape)
-        self.temp_shapes = []
+        self.__class__.temp_shapes = []
 
         inflation = 0.1
         canvas = self.canvas 
@@ -117,15 +118,14 @@ class TestCollisionDetection(unittest.TestCase):
                 shape_1 = crop_shape_to_AABB(shape_1, area)
                 shape_2 = crop_shape_to_AABB(shape_2, area)
                 try:
-                    self.temp_shapes.append(self.canvas.add_shape(shape_1, color='blue'))
-                    self.temp_shapes.append(self.canvas.add_shape(shape_2, color='green'))
+                    self.__class__.temp_shapes.append(self.canvas.add_shape(shape_1, color='blue'))
+                    self.__class__.temp_shapes.append(self.canvas.add_shape(shape_2, color='green'))
                 except Exception as e:
                     print(f"Error adding cropped shapes to canvas: {e}")
         else:
             print("No collisions detected for cropping test.")
 
 
-        
         print("Paused at end of Shape cropping Visualisation. Press Enter to continue...")
         input()  # Waits until the user presses Enter
 
@@ -151,9 +151,9 @@ class TestCollisionDetection(unittest.TestCase):
         # Calling the clipping function
         cropped_poly = suthHodgClip(poly_points, poly_size, clipper_points, clipper_size)
 
-        self.temp_shapes.append(self.canvas.add_shape(poly_points, color='gray'))          # Original polygon
-        self.temp_shapes.append(self.canvas.add_shape(clipper_points, color='orange'))     # Clipper polygon
-        self.temp_shapes.append(self.canvas.add_shape(cropped_poly, color='purple'))       # Cropped polygon
+        self.__class__.temp_shapes.append(self.canvas.add_shape(poly_points, color='gray'))          # Original polygon
+        self.__class__.temp_shapes.append(self.canvas.add_shape(clipper_points, color='orange'))     # Clipper polygon
+        self.__class__.temp_shapes.append(self.canvas.add_shape(cropped_poly, color='purple'))       # Cropped polygon
         
 
         plt.show(block=False)
@@ -177,9 +177,9 @@ class TestCollisionDetection(unittest.TestCase):
                plus collision AABBs if any.
         """
 
-        for shape in self.temp_shapes:
+        for shape in self.__class__.temp_shapes:
             self.canvas.remove_shape(shape)
-        self.temp_shapes = []
+        self.__class__.temp_shapes = []
 
         inflation = 0.1
 
@@ -194,7 +194,7 @@ class TestCollisionDetection(unittest.TestCase):
                 [maxx, maxy],
                 [maxx, miny],
             ])
-            self.temp_shapes.append(self.canvas.add_shape(area, color='black'))
+            self.__class__.temp_shapes.append(self.canvas.add_shape(area, color='black'))
 
         # ------------------ AABB for ARM PARTS ------------------
 
@@ -209,7 +209,7 @@ class TestCollisionDetection(unittest.TestCase):
                 [maxx, maxy],
                 [maxx, miny],
             ])
-            self.temp_shapes.append(self.canvas.add_shape(area, color='gray'))
+            self.__class__.temp_shapes.append(self.canvas.add_shape(area, color='gray'))
 
         # ------------------ COLLISIONS ------------------
 
@@ -226,7 +226,7 @@ class TestCollisionDetection(unittest.TestCase):
                     [maxx, maxy],
                     [maxx, miny],
                 ])
-                self.temp_shapes.append(self.canvas.add_shape(area, color='red'))
+                self.__class__.temp_shapes.append(self.canvas.add_shape(area, color='red'))
         else:
             print("No collisions detected.")
 
@@ -248,10 +248,11 @@ class TestCollisionDetection(unittest.TestCase):
         """
         @brief Visualise GJK distance between two shapes.
         """
-        for shape in self.temp_shapes:
-            print(f"Removing temporary shape from canvas: {shape}")
+
+        shape_list = self.canvas.shapes.copy()
+        for shape in shape_list:
             self.canvas.remove_shape(shape)
-        self.temp_shapes = []
+        self.__class__.temp_shapes = []
 
         inflation = 0.2
         canvas = self.canvas  # shorthand
@@ -268,12 +269,12 @@ class TestCollisionDetection(unittest.TestCase):
             collision, distance = detect_collision_DISTANCE(shape_1, shape_2,intersection,'GJK')
             if collision:
                 print("Shapes are colliding; GJK distance is 0.")
-                self.temp_shapes.append(self.canvas.add_shape(shape_1, color='red'))
-                self.temp_shapes.append(self.canvas.add_shape(shape_2, color='red'))
+                self.__class__.temp_shapes.append(self.canvas.add_shape(shape_1, color='red'))
+                self.__class__.temp_shapes.append(self.canvas.add_shape(shape_2, color='red'))
                 continue
             print(f"GJK Distance: {distance}")
-            self.temp_shapes.append(self.canvas.add_shape(shape_1, color='orange'))
-            self.temp_shapes.append(self.canvas.add_shape(shape_2, color='purple'))
+            self.__class__.temp_shapes.append(self.canvas.add_shape(shape_1, color='green'))
+            self.__class__.temp_shapes.append(self.canvas.add_shape(shape_2, color='purple'))
 
 
         plt.show(block=False)
@@ -284,6 +285,16 @@ class TestCollisionDetection(unittest.TestCase):
 
 
         self.assertTrue(True, "GJK completed with no errors.")
+
+
+    def test_z(self):
+        plt.title("CLOSE WHEN DONE")
+        plt.show(block=True)
+
+        self.assertTrue(True, "Plot Closed Successfully.")
+
+
+
 
 if __name__ == "__main__":
     unittest.main()

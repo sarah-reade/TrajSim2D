@@ -28,6 +28,7 @@ import numpy as np
 from scipy.ndimage import gaussian_filter1d  # smoother hills
 from trajsim2d_core.utils import generate_random_number,generate_random_int,generate_random_int_array,get_random_array_from_list,get_random_coordinate, normal_angle_at_point,tangent_angle_at_point
 from trajsim2d_core.collision import detect_shapes_bounded
+from trajsim2d_core.shape_utils import decompose_to_convex_shapes
 
 # Initialise environment
 global BORDER_SIZE 
@@ -50,6 +51,26 @@ def generate_random_border(border_size=BORDER_SIZE, smoothness=1, num_points=200
     global BORDER_CENTRE
     BORDER_CENTRE = border_size/2
     return generate_random_circle(border_size,smoothness,num_points)
+
+
+def generate_random_convex_objects(num_points=60,object_size=None,object_max=None,smoothness=None,num_objs=None,border_size=None,attempts=100,border=None):
+    """
+    @brief Generate a smooth, random circular object with periodic bumps and decomposes them into convex parts.
+    @param num_points Number of points per object.
+    @param object_size Fixed size for each object (optional).
+    @param object_max Maximum size allowed for objects (optional).
+    @param smoothness Float [0,1] controlling bump smoothness (optional).
+    @param num_objects Number of objects to generate (optional).
+    @return List of Nx2 np.ndarrays, each representing a single object's coordinates.
+    """
+
+    objs = generate_random_objects(num_points,object_size,object_max,smoothness,num_objs,border_size,attempts,border)
+    convex_objs = []
+    for obj in objs:
+        convex_parts = decompose_to_convex_shapes(obj)
+        convex_objs+=convex_parts
+
+    return convex_objs
 
 
 def generate_random_objects(num_points=60,object_size=None,object_max=None,smoothness=None,num_objs=None,border_size=None,attempts=100,border=None):
