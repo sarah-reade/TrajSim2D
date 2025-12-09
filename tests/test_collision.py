@@ -21,10 +21,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-from trajsim2d_core.environment import generate_random_border, generate_random_objects
+from trajsim2d_core.environment import generate_random_border, generate_random_convex_objects
 from trajsim2d_core.visualisation import initialise_visualisation
 from trajsim2d_core.twodmanip import PlanarManipulator
-from trajsim2d_core.collision import detect_any_collisions_AABB, get_AABB, crop_shape_to_AABB, convert_shape_to_numpy, suthHodgClip, detect_collision_DISTANCE
+from trajsim2d_core.collision import detect_any_collisions_AABB, get_AABB, crop_shape_to_AABB, convert_shape_to_numpy, suthHodgClip, detect_collision_DISTANCE,detect_any_collisions, gjk_distance
 
 
 class TestCollisionDetection(unittest.TestCase):
@@ -36,6 +36,7 @@ class TestCollisionDetection(unittest.TestCase):
     # -------- CLASS-LEVEL SHARED VARIABLES --------
     border = None
     objs = None
+    concave_objs = None
     arm = None
     canvas = None
     base_tf = None
@@ -56,10 +57,10 @@ class TestCollisionDetection(unittest.TestCase):
         print("\n[SETUP] Initialising shared test environment...")
 
         # Generate a random bumpy border
-        cls.border = generate_random_border(border_size=10, smoothness=0.1)
+        cls.border = generate_random_border(border_size=5, smoothness=0.1)
 
         # Generate random objects
-        cls.objs = generate_random_objects(object_size=0.5, num_objs=20, smoothness=0.1)
+        cls.objs, cls.concave_objs = generate_random_convex_objects(object_size=0.5, num_objs=5, smoothness=0.5)
 
         # Generate manipulator + random config
         cls.arm = PlanarManipulator()
@@ -72,7 +73,7 @@ class TestCollisionDetection(unittest.TestCase):
          cls.object_ids,
          cls.arm_ids) = initialise_visualisation(
             border=cls.border,
-            objs=cls.objs,
+            objs=cls.concave_objs,
             arm=cls.arm,
             joint_config_1=cls.config_1
         )
@@ -241,8 +242,64 @@ class TestCollisionDetection(unittest.TestCase):
 
 
     # =====================================================
-    # ================ GJK VISUALISATION TEST =============
+    # ===================== GJK TEST ======================
     # =====================================================
+    def test_GJK(self):
+        """
+        @brief Test GJK collision detection between random objects
+        """
+        shape_list = self.canvas.shapes.copy()
+        for shape in shape_list:
+            self.canvas.remove_shape(shape)
+        self.__class__.temp_shapes = []
+
+        shape = np.array([
+            [0.00, 0.00],
+            [0.30, 0.05],
+            [0.40, 0.25],
+            [0.18, 0.35],
+            [0.05, 0.20]
+        ])
+
+        
+        # Convex shape that *overlaps* `shape` (shares area)
+        shape_overlap = np.array([
+            [0.15, 0.10],
+            [0.35, 0.10],
+            [0.42, 0.20],
+            [0.30, 0.30],
+            [0.12, 0.25]
+        ])
+
+        # Convex shape that does *not* overlap `shape` (disjoint)
+        shape_no_overlap = np.array([
+            [0.60, 0.60],
+            [0.80, 0.60],
+            [0.90, 0.75],
+            [0.72, 0.88],
+            [0.55, 0.75]
+        ])
+
+        self.__class__.temp_shapes.append(self.canvas.add_shape(shape, color='blue'))
+        self.__class__.temp_shapes.append(self.canvas.add_shape(shape_overlap, color='red'))
+        self.__class__.temp_shapes.append(self.canvas.add_shape(shape_no_overlap, color='green'))
+
+        collision_flag, distance = gjk_distance(shape, shape_overlap)
+        print("GJK Distance (overlap): ", distance)
+        self.assertTrue(collision_flag, "GJK failed to detect collision when shapes overlap.")
+
+        collision_flag, distance = gjk_distance(shape, shape_no_overlap)
+        print("GJK Distance (overlap): ", distance)
+        self.assertFalse(collision_flag, "GJK incorrectly detected collision when shapes do not overlap.")
+
+        plt.show(block=False)
+        print("Paused at end of GJK Test. Press Enter to continue...")
+        input()  # Waits until the user presses Enter
+
+        print("Continuing execution...")
+
+
+        self.assertTrue(True, "GJK completed with no errors.")
 
     def test_GJK_distance_visualisation(self):
         """
@@ -257,21 +314,15 @@ class TestCollisionDetection(unittest.TestCase):
         inflation = 0.2
         canvas = self.canvas  # shorthand
 
-        collision_flag, collision_list = detect_any_collisions_AABB(
-            self.arm_geometry, self.objs, inflation
+        collision_flag, collision_list = detect_any_collisions(
+            self.arm_geometry, self.objs, inflation, 'GJK'
         )
 
         if not collision_flag:
             self.skipTest("No collisions detected; skipping GJK distance visualisation.")
 
 
-        for (shape_1, shape_2, intersection) in collision_list:
-            collision, distance = detect_collision_DISTANCE(shape_1, shape_2,intersection,'GJK')
-            if collision:
-                print("Shapes are colliding; GJK distance is 0.")
-                self.__class__.temp_shapes.append(self.canvas.add_shape(shape_1, color='red'))
-                self.__class__.temp_shapes.append(self.canvas.add_shape(shape_2, color='red'))
-                continue
+        for (shape_1, shape_2, distance) in collision_list:
             print(f"GJK Distance: {distance}")
             self.__class__.temp_shapes.append(self.canvas.add_shape(shape_1, color='green'))
             self.__class__.temp_shapes.append(self.canvas.add_shape(shape_2, color='purple'))
@@ -287,11 +338,11 @@ class TestCollisionDetection(unittest.TestCase):
         self.assertTrue(True, "GJK completed with no errors.")
 
 
-    def test_z(self):
-        plt.title("CLOSE WHEN DONE")
-        plt.show(block=True)
+    # def test_z(self):
+    #     plt.title("CLOSE WHEN DONE")
+    #     plt.show(block=True)
 
-        self.assertTrue(True, "Plot Closed Successfully.")
+    #     self.assertTrue(True, "Plot Closed Successfully.")
 
 
 

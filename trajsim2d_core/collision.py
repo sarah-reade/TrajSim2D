@@ -135,7 +135,7 @@ def detect_shapes_bounded(boundary,shapes):
 
     return False
 
-def detect_any_collisions(shapes_1,shapes_2,max_distance=0.1):
+def detect_any_collisions(shapes_1,shapes_2,max_distance=0.1,method='GJK'):
     """
     @brief Iterates through all shapes and checks for collisions between them.
 
@@ -143,7 +143,7 @@ def detect_any_collisions(shapes_1,shapes_2,max_distance=0.1):
     @param shapes_2 List of shapes representing the second set of shapes to check against shapes_1.
     @param max_distance Float representing the maximum distance to obtain a measurement of how far objects are away from each other.
     @return bool True if any collision is detected, False otherwise.
-    @return collision_shapes_id List of tuples (shape_1, shape_2, distance) representing which shapes are colliding and the distance between them.
+    @return collision_distances List of tuples (shape_1, shape_2, distance) representing which shapes are colliding and the distance between them.
     """
 
     # Create a list of potentially intersecting shapes and their potentially intersecting areas using bounding boxes
@@ -153,7 +153,7 @@ def detect_any_collisions(shapes_1,shapes_2,max_distance=0.1):
         return False,[]
     
     # For all potentially intersecting shapes check for more in detail collisions:
-    #any_collisions_flag, collision_distances = detect_any_collisions_DISTANCE(pot_collision_shapes)
+    any_collisions_flag, collision_distances = detect_any_collisions_DISTANCE(pot_collision_shapes,method)
 
 
     collision_distances = []
@@ -184,7 +184,7 @@ def detect_any_collisions_AABB(shapes_1,shapes_2,inflation=0.1):
             
     return bool(potential_collisions), potential_collisions
             
-def detect_any_collisions_DISTANCE(shapes):
+def detect_any_collisions_DISTANCE(shapes,method='GJK'):
     """
     @brief Checks for collisions or distances between shape pairs using a distance-based algorithm (placeholder).
 
@@ -199,7 +199,7 @@ def detect_any_collisions_DISTANCE(shapes):
 
     for shape_1, shape_2, intersecting_area in shapes:
             
-        collision, distance = detect_collision_DISTANCE(shape_1,shape_2,intersecting_area)
+        collision, distance = detect_collision_DISTANCE(shape_1,shape_2,intersecting_area,method)
         if collision:
             collision_flag = True
         distances.append((shape_1,shape_2,distance))
@@ -475,11 +475,11 @@ def gjk_distance(shape_1,shape_2):
             if dist < smallest_distance:
                 smallest_distance = dist
             vector_polygon.append(vector)
-            
     
     if point_in_polygon(np.array([0.0,0.0]),np.array(vector_polygon)):
         return True, 0.0
     
+    print("smallest_distance: ",smallest_distance)
     return False, smallest_distance
 
 

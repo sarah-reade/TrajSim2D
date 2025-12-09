@@ -61,7 +61,8 @@ def generate_random_convex_objects(num_points=60,object_size=None,object_max=Non
     @param object_max Maximum size allowed for objects (optional).
     @param smoothness Float [0,1] controlling bump smoothness (optional).
     @param num_objects Number of objects to generate (optional).
-    @return List of Nx2 np.ndarrays, each representing a single object's coordinates.
+    @return List of Nx2 np.ndarrays, each representing a convex part of the objects.
+    @return List of Nx2 np.ndarrays, the list of potentially concave objects generated.
     """
 
     objs = generate_random_objects(num_points,object_size,object_max,smoothness,num_objs,border_size,attempts,border)
@@ -70,7 +71,7 @@ def generate_random_convex_objects(num_points=60,object_size=None,object_max=Non
         convex_parts = decompose_to_convex_shapes(obj)
         convex_objs+=convex_parts
 
-    return convex_objs
+    return convex_objs, objs
 
 
 def generate_random_objects(num_points=60,object_size=None,object_max=None,smoothness=None,num_objs=None,border_size=None,attempts=100,border=None):

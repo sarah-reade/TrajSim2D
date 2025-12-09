@@ -20,7 +20,7 @@ import unittest
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 
-from trajsim2d_core.environment import generate_random_border, generate_random_objects
+from trajsim2d_core.environment import generate_random_border, generate_random_convex_objects
 from trajsim2d_core.visualisation import initialise_visualisation
 from trajsim2d_core.twodmanip import PlanarManipulator
 
@@ -56,7 +56,7 @@ class TestVisualisation(unittest.TestCase):
         # Generate a random bumpy border for testing
         border = generate_random_border(border_size=10, smoothness=0.1)
         # Generate a random bumpy objects for testing
-        objs = generate_random_objects(object_size=0.5,num_objs=5,smoothness=0.1)
+        objs = generate_random_convex_objects(object_size=0.5,num_objs=5,smoothness=0.1)
         # Generate a random arm for testing
         arm = PlanarManipulator()
 
