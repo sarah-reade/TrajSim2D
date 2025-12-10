@@ -482,6 +482,7 @@ def gjk_distance(shape_1,shape_2):
     return False, smallest_distance
 
 
+
 def sat_distance(shape_1,shape_2):
     """
     @brief SAT distance algorithm between two np.ndarray shapes
@@ -597,3 +598,5 @@ def suthHodgClip(poly_points, poly_size, clipper_points, clipper_size):
 
 
     return poly_points[:poly_size]
+
+

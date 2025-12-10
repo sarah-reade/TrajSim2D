@@ -316,10 +316,10 @@ class TestCollisionDetection(unittest.TestCase):
         input()  # Waits until the user presses Enter
         print("Continuing execution...")
 
-        shape_list = self.canvas.shapes.copy()
-        for shape in shape_list:
-            self.canvas.remove_shape(shape)
-        self.__class__.temp_shapes = []
+        # shape_list = self.canvas.shapes.copy()
+        # for shape in shape_list:
+        #     self.canvas.remove_shape(shape)
+        # self.__class__.temp_shapes = []
 
         inflation = 0.2
         canvas = self.canvas  # shorthand
@@ -332,10 +332,8 @@ class TestCollisionDetection(unittest.TestCase):
             self.skipTest("No collisions detected; skipping GJK distance visualisation.")
 
 
-
-        print("Collision List: ",collision_list)
         for (shape_1, shape_2, distance) in collision_list:
-            if distance == 0.0:
+            if distance < 0.00001:
                 self.__class__.temp_shapes.append(self.canvas.add_shape(shape_1, color='red'))
                 self.__class__.temp_shapes.append(self.canvas.add_shape(shape_2, color='red'))
                 continue

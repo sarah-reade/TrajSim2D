@@ -88,7 +88,7 @@ def visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=None,base_tran
     arm_geometry_1 = arm.make_arm_geometry(joint_config_1,base_transform)
     arm_geometry_2 = arm.make_arm_geometry(joint_config_2,base_transform)
 
-    return visualise_object(canvas,arm_geometry_1,'green') + visualise_object(canvas,arm_geometry_2,'red'),base_transform
+    return visualise_object(canvas,arm_geometry_1,'green') + visualise_object(canvas,arm_geometry_2,'yellow'),base_transform
 
 def visualise_object(canvas,obj,color='red', alpha=0.5):
     return canvas.add_shape(obj,color,alpha)
