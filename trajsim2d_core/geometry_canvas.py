@@ -186,7 +186,6 @@ class GeometryCanvas:
         @return Unique shape identifier (UUID string).
         """
         if isinstance(obj,Circle):
-            print("Colour: ",color)
             obj.set_edgecolor(color)
             obj.set_facecolor(color)
             obj.set_alpha(alpha)

@@ -116,8 +116,9 @@ class PlanarManipulator:
             circular joint.
         
         """
-        half_alpha = np.arctan2(link_width/2,joint_radius)
-        alpha = 2*half_alpha
+        half_beta = np.arctan2(link_width/2,joint_radius)
+        beta = 2*half_beta
+        alpha = np.pi - beta
         return alpha
 
     def generate_random_config(self, border= None, objs = [], attempts=100):

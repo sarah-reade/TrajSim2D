@@ -152,7 +152,6 @@ def detect_any_collisions(shapes_1,shapes_2,max_distance=0.2,method='GJK'):
     if not any_collisions_flag:
         return False,[]
     
-    print("Potential collisions detected: ",len(pot_collision_shapes))
     # For all potentially intersecting shapes check for more in detail collisions:
     any_collisions_flag, collision_distances = detect_any_collisions_DISTANCE(pot_collision_shapes,method)
 
@@ -478,6 +477,9 @@ def gjk_distance(shape_1,shape_2):
     
     if point_in_polygon(np.array([0.0,0.0]),np.array(vector_polygon)):
         return True, 0.0
+    
+    if smallest_distance > 0.03:
+        return False, smallest_distance
     
     return False, smallest_distance
 

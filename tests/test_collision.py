@@ -311,10 +311,6 @@ class TestCollisionDetection(unittest.TestCase):
         @brief Visualise GJK distance between two shapes.
         """
         
-        plt.pause(2)
-        print("Paused at Arm Visualisation. Press Enter to continue...")
-        input()  # Waits until the user presses Enter
-        print("Continuing execution...")
 
         # shape_list = self.canvas.shapes.copy()
         # for shape in shape_list:
@@ -328,16 +324,21 @@ class TestCollisionDetection(unittest.TestCase):
             self.arm_geometry, self.objs, inflation, 'GJK'
         )
 
+        plt.pause(2)
+        print("Paused at Arm Visualisation. Press Enter to continue...")
+        input()  # Waits until the user presses Enter
+        print("Continuing execution...")
+
         if not collision_flag:
             self.skipTest("No collisions detected; skipping GJK distance visualisation.")
 
 
         for (shape_1, shape_2, distance) in collision_list:
-            if distance < 0.00001:
+            if distance < 0.03:
                 self.__class__.temp_shapes.append(self.canvas.add_shape(shape_1, color='red'))
                 self.__class__.temp_shapes.append(self.canvas.add_shape(shape_2, color='red'))
                 continue
-
+            print(f"GJK Distance between shapes: {distance:.4f}")
             # self.__class__.temp_shapes.append(self.canvas.add_shape(shape_1, color='green'))
             # self.__class__.temp_shapes.append(self.canvas.add_shape(shape_2, color='purple'))
 

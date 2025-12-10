@@ -29,6 +29,7 @@ from trajsim2d_core.geometry_canvas import GeometryCanvas
 from trajsim2d_core.utils import make_transform_2d, generate_random_number
 from trajsim2d_core.environment import generate_random_edge_point
 from trajsim2d_core.twodmanip import PlanarManipulator
+from trajsim2d_core.collision import detect_any_collisions
 import numpy as np
 
 # Initialise visualisation 
@@ -72,8 +73,19 @@ def visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=None,base_tran
         base_transform = make_transform_2d() 
 
         if border is not None or objs is not None:
-            point, angle = generate_random_edge_point(border,objs)
-            base_transform = make_transform_2d(point[0],point[1],angle)
+            collision = True
+            attempts = 0
+            while collision and attempts < 10:
+                print(f"Attempt {attempts+1} to place arm without collision.")
+                point, angle = generate_random_edge_point(border,objs)
+                base_transform = make_transform_2d(point[0],point[1],angle)
+                random_config = arm.generate_random_config(border,objs)
+                arm_geometry = arm.make_arm_geometry(random_config,base_transform)
+                collision, collision_distances = detect_any_collisions([arm_geometry[0],arm_geometry[int(np.floor(len(arm_geometry)/2))]],objs,0.2)
+                print(f"Collision distances: {collision_distances}")
+                attempts += 1
+            
+
 
 
     ## Generate a valid joint config
