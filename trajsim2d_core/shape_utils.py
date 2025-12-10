@@ -19,7 +19,7 @@ def decompose_to_convex_shapes(shape, max_iterations=10):
         
         new_polygon = []
         segmented_shape_list += segmented_shapes.copy()
-        print("segmented_shapes: ",segmented_shapes)
+        #print("segmented_shapes: ",segmented_shapes)
         
                 
         for seg in segmented_shapes:

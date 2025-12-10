@@ -103,13 +103,13 @@ class GeometryCanvas:
                 id.append(self.add_shape(obj_ind,color,alpha))
 
         elif isinstance(obj,np.ndarray):
-            id = self.add_array(obj,color,alpha)
+            id = self.add_array(arr=obj,color=color,alpha=alpha)
 
         elif isinstance(obj,Rectangle):
-            id = self.add_rectangle(obj,color,alpha)
+            id = self.add_rectangle(obj=obj,color=color,alpha=alpha)
 
         elif isinstance(obj,Circle):
-            id = self.add_circle(obj,color,alpha)
+            id = self.add_circle(obj=obj,color=color,alpha=alpha)
         
         else:
             return None
@@ -145,6 +145,8 @@ class GeometryCanvas:
         @return Unique shape identifier (UUID string).
         """
         if isinstance(obj,Rectangle):
+            obj.set_color(color)
+            obj.set_alpha(alpha)
             shape_id = str(uuid.uuid4())
             self.ax.add_patch(obj)
             self.shapes[shape_id] = obj
@@ -184,6 +186,10 @@ class GeometryCanvas:
         @return Unique shape identifier (UUID string).
         """
         if isinstance(obj,Circle):
+            print("Colour: ",color)
+            obj.set_edgecolor(color)
+            obj.set_facecolor(color)
+            obj.set_alpha(alpha)
             shape_id = str(uuid.uuid4())
             self.ax.add_patch(obj)
             self.shapes[shape_id] = obj

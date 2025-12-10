@@ -238,6 +238,11 @@ class TestCollisionDetection(unittest.TestCase):
 
         print("Continuing execution...")
 
+        shape_list = self.canvas.shapes.copy()
+        for shape in shape_list:
+            self.canvas.remove_shape(shape)
+        self.__class__.temp_shapes = []
+
         self.assertTrue(True, "AABB visualisation completed with no errors.")
 
 
@@ -305,6 +310,11 @@ class TestCollisionDetection(unittest.TestCase):
         """
         @brief Visualise GJK distance between two shapes.
         """
+        
+        plt.pause(2)
+        print("Paused at Arm Visualisation. Press Enter to continue...")
+        input()  # Waits until the user presses Enter
+        print("Continuing execution...")
 
         shape_list = self.canvas.shapes.copy()
         for shape in shape_list:
@@ -322,10 +332,16 @@ class TestCollisionDetection(unittest.TestCase):
             self.skipTest("No collisions detected; skipping GJK distance visualisation.")
 
 
+
+        print("Collision List: ",collision_list)
         for (shape_1, shape_2, distance) in collision_list:
-            print(f"GJK Distance: {distance}")
-            self.__class__.temp_shapes.append(self.canvas.add_shape(shape_1, color='green'))
-            self.__class__.temp_shapes.append(self.canvas.add_shape(shape_2, color='purple'))
+            if distance == 0.0:
+                self.__class__.temp_shapes.append(self.canvas.add_shape(shape_1, color='red'))
+                self.__class__.temp_shapes.append(self.canvas.add_shape(shape_2, color='red'))
+                continue
+
+            # self.__class__.temp_shapes.append(self.canvas.add_shape(shape_1, color='green'))
+            # self.__class__.temp_shapes.append(self.canvas.add_shape(shape_2, color='purple'))
 
 
         plt.show(block=False)
