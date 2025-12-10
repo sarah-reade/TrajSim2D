@@ -60,7 +60,7 @@ class TestCollisionDetection(unittest.TestCase):
         cls.border = generate_random_border(border_size=5, smoothness=0.1)
 
         # Generate random objects
-        cls.objs, cls.concave_objs = generate_random_convex_objects(object_size=0.5, num_objs=5, smoothness=0.5)
+        cls.objs, cls.concave_objs = generate_random_convex_objects(object_size=1, num_objs=5, smoothness=0.5)
 
         # Generate manipulator + random config
         cls.arm = PlanarManipulator()
@@ -73,7 +73,7 @@ class TestCollisionDetection(unittest.TestCase):
          cls.object_ids,
          cls.arm_ids) = initialise_visualisation(
             border=cls.border,
-            objs=cls.concave_objs,
+            objs=cls.objs,
             arm=cls.arm,
             joint_config_1=cls.config_1
         )

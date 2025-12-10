@@ -82,9 +82,10 @@ class PlanarManipulator:
         if link_width is None:
             link_width = generate_random_number(0.01,0.2)
         if link_lengths is None:
-            link_lengths= generate_random_number(0.1,1,n)
+            link_lengths= generate_random_number(link_width,1,n)
         if joint_radius is None:
-            joint_radius= generate_random_number(link_width/4,link_width)
+            
+            joint_radius= generate_random_number(link_width/2,np.min(link_lengths)/2)
             
 
         # Print all generated values after initialization

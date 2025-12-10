@@ -56,12 +56,12 @@ class TestVisualisation(unittest.TestCase):
         # Generate a random bumpy border for testing
         border = generate_random_border(border_size=10, smoothness=0.1)
         # Generate a random bumpy objects for testing
-        objs, concave_objs = generate_random_convex_objects(object_size=0.5,num_objs=5,smoothness=0.1)
+        objs, concave_objs = generate_random_convex_objects(object_size=0.5,num_objs=5,smoothness=0.001)
         # Generate a random arm for testing
         arm = PlanarManipulator()
 
         # Initialise the visualisation
-        canvas, base_tf, border_id, object_ids, arm_ids  = initialise_visualisation(border=border,objs=concave_objs,arm=arm)
+        canvas, base_tf, border_id, object_ids, arm_ids  = initialise_visualisation(border=border,objs=objs,arm=arm)
 
         # Show the figure in blocking mode — execution will pause until the window is closed
         plt.show(block=True)
