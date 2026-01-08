@@ -19,6 +19,8 @@
 # Imports
 import numpy as np
 from matplotlib.patches import Polygon, Rectangle, Circle
+from trajsim2d_core.shape_utils import decompose_to_convex_shapes
+
 
 
 ## Detect Collision
@@ -117,6 +119,81 @@ def detect_circle_collision_DISTANCE(circle_1,circle_2):
 
     return collision, distance
 
+def detect_shape_bounded(shape,boundary,boundary_decomposed = None):
+    """
+    @brief checks that the shape is contained in the boundary 
+    @param boundary is a shape area to check the shape is contained within
+    @param shape is a shape to check it is contained within the boundary
+    @return bool: if shape is in bounds
+    """
+    if boundary is None:
+        return True
+
+    if boundary_decomposed is None:
+        boundary_decomposed = decompose_to_convex_shapes(boundary)
+    
+    if shape is None:
+        return True
+
+
+
+def create_convex_boundary_objects(boundary, convex = True):
+    """
+    @brief creates a large polygon object surrounding the boundary to use for collision detection
+    @param boundary is a shape area to create the object around
+    @return list of np.ndarray of boundary object points
+    """
+    ## Create a large box to create an object surrounding the boundary
+    minx, miny, maxx, maxy = get_AABB(boundary,inflation=5.0)
+
+    ## get the highest and lowest point of the np.ndarray boundary
+    highest_point_idx = np.argmax(boundary[:,1])
+    lowest_point_idx = np.argmin(boundary[:,1])
+
+    ## take x value and max y of bounding box to create a point to joint the boundary to the bounding box
+    box_connection_point_high = np.array([[boundary[highest_point_idx,0], maxy]])
+    box_connection_point_low = np.array([[boundary[lowest_point_idx,0], miny]])
+
+    ## Add points to create a large polygon around the boundary
+    # Bounding box corners (clockwise)
+    bbox_left = np.array([
+        [minx, miny],
+        [minx, maxy]
+    ])
+    bbox_right = np.array([
+        [maxx, maxy],
+        [maxx, miny]
+    ])
+
+    # Assemble final polygons
+    n = len(boundary)
+
+    boundary_low_to_high  = np.take(boundary, np.arange(lowest_point_idx, highest_point_idx + n + 1) % n, axis=0)
+    boundary_high_to_low  = np.take(boundary, np.arange(highest_point_idx, lowest_point_idx + n + 1) % n, axis=0)
+
+    # highest point on polygon -> box_connection_point_high -> bbox_right -> box_connection_point_low -> boundary between point low to point high
+    boundary_right = np.vstack([
+        boundary_high_to_low,
+        box_connection_point_high,
+        bbox_right,
+        box_connection_point_low
+    ])
+
+
+    # lowest point on polygon -> box_connection_point_low -> bbox_left -> box_connection_point_high -> boundary between point high to point low
+    boundary_left = np.vstack([
+        boundary_low_to_high,
+        box_connection_point_low,
+        bbox_left,
+        box_connection_point_high
+    ])
+
+
+    boundary_objects = decompose_to_convex_shapes(boundary_right)
+    boundary_objects += decompose_to_convex_shapes(boundary_left)
+
+    return boundary_objects, boundary_right, boundary_left
+    
 
 def detect_shapes_bounded(boundary,shapes):
     """
@@ -131,9 +208,11 @@ def detect_shapes_bounded(boundary,shapes):
     if shapes is None:
         return True
     
+    for shape in shapes:
+        if not detect_shape_bounded(shape,boundary,boundary_decomposed = decompose_to_convex_shapes(boundary)):
+            return False
 
-
-    return False
+    return True
 
 def detect_any_collisions(shapes_1,shapes_2,max_distance=0.2,method='GJK'):
     """
@@ -550,10 +629,11 @@ def clip(poly_points, poly_size, x1, y1, x2, y2):
 
         # Calculating position of first point w.r.t. clipper line
         i_pos = (x2-x1) * (iy-y1) - (y2-y1) * (ix-x1)
-
         # Calculating position of second point w.r.t. clipper line
         k_pos = (x2-x1) * (ky-y1) - (y2-y1) * (kx-x1)
 
+        print("i_pos:", i_pos)
+        print("k_pos:", k_pos) 
         # Case 1 : When both points are inside
         if i_pos < 0 and k_pos < 0:
             # Only second point is added

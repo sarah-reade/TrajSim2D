@@ -24,8 +24,9 @@ import numpy as np
 from trajsim2d_core.environment import generate_random_border, generate_random_convex_objects
 from trajsim2d_core.visualisation import initialise_visualisation
 from trajsim2d_core.twodmanip import PlanarManipulator
-from trajsim2d_core.collision import detect_any_collisions_AABB, get_AABB, crop_shape_to_AABB, convert_shape_to_numpy, suthHodgClip, detect_collision_DISTANCE,detect_any_collisions, gjk_distance
-
+from trajsim2d_core.collision import detect_any_collisions_AABB, get_AABB, crop_shape_to_AABB, convert_shape_to_numpy, suthHodgClip, detect_collision_DISTANCE,detect_any_collisions, gjk_distance, detect_shape_bounded, create_convex_boundary_objects
+from matplotlib.patches import Rectangle
+from trajsim2d_core.geometry_canvas import GeometryCanvas
 
 class TestCollisionDetection(unittest.TestCase):
     """
@@ -352,6 +353,54 @@ class TestCollisionDetection(unittest.TestCase):
 
         self.assertTrue(True, "GJK completed with no errors.")
 
+
+class TestBoundary(unittest.TestCase):
+
+    # =====================================================
+    # ================== Boundary TEST ====================
+    # =====================================================
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        Runs ONCE before any tests.
+        Creates the shared environment: border, objects, arm, canvas.
+        """
+        print("\n[SETUP] Initialising shared test environment...")
+
+        # Generate a random bumpy border
+        cls.border = generate_random_border(border_size=5, smoothness=0.1)
+
+        cls.canvas = GeometryCanvas()
+
+        
+
+
+
+    def test_create_boundary_object(self):
+        boundary = generate_random_border(border_size=10, smoothness=0.1)
+        [boundary_object, boundary_right, boundary_left] = create_convex_boundary_objects(boundary)
+
+        self.canvas.add_shape(boundary_object, color='black', alpha=0.3)
+        self.canvas.add_shape(boundary_right, color='red', alpha=0.5)
+        self.canvas.add_shape(boundary_left, color='blue', alpha=0.5)
+
+        self.assertTrue(True, "Boundary Object Creation completed with no errors.")
+        
+        
+        plt.title("CLOSE WHEN DONE")
+        plt.show(block=True)
+
+    def test_boundary_rect_function(self):
+        rect = Rectangle((2.0, 1.0), 4.0, 1.5, angle=30.0)
+        border = generate_random_border(border_size=10, smoothness=0.1)
+
+        self.canvas.add_shape(border, color='black', alpha=0.3)
+        self.canvas.add_shape(rect, color='blue', alpha=0.5)
+
+        success = detect_shape_bounded(rect, border)
+
+        self.assertTrue(success, "Shape is within the boundary.")
 
     # def test_z(self):
     #     plt.title("CLOSE WHEN DONE")
