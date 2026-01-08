@@ -64,7 +64,7 @@ class TestCollisionDetection(unittest.TestCase):
 
         # Generate manipulator + random config
         cls.arm = PlanarManipulator()
-        cls.config_1 = cls.arm.generate_random_config(cls.border, cls.objs, 1)
+        [_,cls.config_1] = cls.arm.generate_random_config(cls.border, cls.objs, 1)
 
         # Initialise shared canvas & drawing elements
         (cls.canvas,

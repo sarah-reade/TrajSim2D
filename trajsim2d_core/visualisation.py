@@ -64,7 +64,7 @@ def initialise_visualisation(border=None,objs=None,base_transform=None,arm=None,
     return canvas, base_transform, border_id, object_ids, arm_ids
 
 # Initialise Arm
-def visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=None,base_transform=None,joint_config_1=None,joint_config_2=None):
+def visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=None,base_transform=None,joint_config_1=None,joint_config_2=None,attempt_max = 10):
     """
     @ brief adds an arm to the canvas
     """
@@ -75,11 +75,11 @@ def visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=None,base_tran
         if border is not None or objs is not None:
             collision = True
             attempts = 0
-            while collision and attempts < 10:
+            while collision and attempts < attempt_max:
                 print(f"Attempt {attempts+1} to place arm without collision.")
                 point, angle = generate_random_edge_point(border,objs)
                 base_transform = make_transform_2d(point[0],point[1],angle)
-                random_config = arm.generate_random_config(border,objs)
+                [_, random_config] = arm.generate_random_config(border,objs)
                 arm_geometry = arm.make_arm_geometry(random_config,base_transform)
                 collision, collision_distances = detect_any_collisions([arm_geometry[0],arm_geometry[int(np.floor(len(arm_geometry)/2))]],objs,0.2)
                 print(f"Collision distances: {collision_distances}")
@@ -90,15 +90,18 @@ def visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=None,base_tran
 
     ## Generate a valid joint config
     if joint_config_1 is None:
-        joint_config_1 = arm.generate_random_config(border,objs)
+        [self_collision, joint_config_1] = arm.generate_random_config(border,objs)
+        if self_collision:
+            print("Warning: Could not generate a self-collision-free joint configuration for joint_config_1.")
     
     if joint_config_2 is None:
-        joint_config_2 = arm.generate_random_config(border,objs)
-    
+        [self_collision, joint_config_2] = arm.generate_random_config(border,objs)
+        if self_collision:
+            print("Warning: Could not generate a self-collision-free joint configuration for joint_config_2.")
 
     ## visualise on canvas
-    arm_geometry_1 = arm.make_arm_geometry(joint_config_1,base_transform)
-    arm_geometry_2 = arm.make_arm_geometry(joint_config_2,base_transform)
+    arm_geometry_1 = arm.make_arm_geometry(joint_config_1,base_transform,clip_ends=0.0)
+    arm_geometry_2 = arm.make_arm_geometry(joint_config_2,base_transform,clip_ends=0.0)
 
     return visualise_object(canvas,arm_geometry_1,'green') + visualise_object(canvas,arm_geometry_2,'yellow'),base_transform
 

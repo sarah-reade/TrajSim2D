@@ -128,7 +128,7 @@ class PlanarManipulator:
             config = generate_random_number(-self.joint_limit,self.joint_limit,len(self.link_lengths))
             counter += 1
         
-        return config
+        return self.in_collision(config,border,objs),config
 
     def in_collision(self,config,border= None,objs = []):
         
@@ -142,7 +142,7 @@ class PlanarManipulator:
 
         return False
 
-    def make_arm_geometry(self,config,base_tf=None):
+    def make_arm_geometry(self,config,base_tf=None,clip_ends=0.05):
         if base_tf is None:
             base_tf=self.base_tf
 
@@ -150,7 +150,7 @@ class PlanarManipulator:
         link_tfs = self.link_forward_kinematics(tfs)
 
         self.joint_circles = self.make_joint_circles(tfs)
-        self.link_rectangles = self.make_link_rectangles(link_tfs)
+        self.link_rectangles = self.make_link_rectangles(link_tfs,clip_ends=clip_ends)
 
         return self.joint_circles + self.link_rectangles
     
@@ -229,7 +229,7 @@ class PlanarManipulator:
 
         return [Circle([tf[0,2],tf[1,2]],self.joint_radius) for tf in tfs[:-1]]
 
-    def make_link_rectangles(self,link_tfs):
+    def make_link_rectangles(self,link_tfs,clip_ends=0.1):
         """
         @brief Generate Rectangle objects representing the links of the robotic arm.
 
@@ -244,9 +244,9 @@ class PlanarManipulator:
         tf = link_tfs[0]
         # base rectangle
         rectangles = [Rectangle(
-            xy=getRectAnchor(tf,self.link_width,self.base_offset - self.joint_radius),
+            xy=getRectAnchor(tf,self.link_width,self.base_offset - self.joint_radius - 2*clip_ends),
             width=self.link_width,
-            height=self.base_offset - self.joint_radius,
+            height=self.base_offset - self.joint_radius - clip_ends,
             angle=getRectAngle(tf)
         )]
 
@@ -258,7 +258,27 @@ class PlanarManipulator:
                 height=self.link_lengths[i] - 2 * self.joint_radius,
                 angle=getRectAngle(tf)
             )
-            for i, tf in enumerate(link_tfs[1:])  # enumerate for i
+            for i, tf in enumerate(link_tfs[1:-1])  # enumerate for i
         ]  
+        
+        
+        # EE link 
+        rectangles += [Rectangle(
+            xy=getRectAnchor(link_tfs[-1],self.link_width,self.link_lengths[-1] - 2*self.joint_radius),
+            width=self.link_width,
+            height=np.maximum(0.0,self.link_lengths[-1] - self.joint_radius - clip_ends),
+            angle=getRectAngle(link_tfs[-1])
+        )]
 
         return rectangles
+
+    def print_parameters(self):
+        """
+        @brief Print the manipulator's parameters to the console.
+        """
+        print("Planar Manipulator Parameters:")
+        print(f"  Number of Links: {self.n}")
+        print(f"  Link Widths: {self.link_width}")
+        print(f"  Link Lengths: {self.link_lengths}")
+        print(f"  Joint Radius: {self.joint_radius}")
+        print(f"  Joint Limit (radians): ±{self.joint_limit}")

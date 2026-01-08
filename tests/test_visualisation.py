@@ -59,6 +59,7 @@ class TestVisualisation(unittest.TestCase):
         objs, concave_objs = generate_random_convex_objects(object_size=0.5,num_objs=5,smoothness=0.001)
         # Generate a random arm for testing
         arm = PlanarManipulator()
+        arm.print_parameters()
         # config_1 = [arm.joint_limit for _ in range(arm.n)]
         # config_2 = [-arm.joint_limit for _ in range(arm.n)]
 
