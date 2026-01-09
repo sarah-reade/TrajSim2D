@@ -29,7 +29,7 @@ from trajsim2d_core.geometry_canvas import GeometryCanvas
 from trajsim2d_core.utils import make_transform_2d, generate_random_number
 from trajsim2d_core.environment import generate_random_edge_point
 from trajsim2d_core.twodmanip import PlanarManipulator
-from trajsim2d_core.collision import detect_any_collisions
+from trajsim2d_core.collision import detect_any_collisions, detect_any_collisions_bounded, create_convex_boundary_objects
 import numpy as np
 
 # Initialise visualisation 
@@ -75,14 +75,12 @@ def visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=None,base_tran
         if border is not None or objs is not None:
             collision = True
             attempts = 0
+            convex_border = create_convex_boundary_objects(border) 
             while collision and attempts < attempt_max:
                 print(f"Attempt {attempts+1} to place arm without collision.")
                 point, angle = generate_random_edge_point(border,objs)
                 base_transform = make_transform_2d(point[0],point[1],angle)
-                [_, random_config] = arm.generate_random_config(border,objs)
-                arm_geometry = arm.make_arm_geometry(random_config,base_transform)
-                collision, collision_distances = detect_any_collisions([arm_geometry[0],arm_geometry[int(np.floor(len(arm_geometry)/2))]],objs,0.2)
-                print(f"Collision distances: {collision_distances}")
+                [collision, _] = arm.generate_random_config(border,objs,attempts=attempt_max,convex_boundary=convex_border)
                 attempts += 1
             
 
@@ -90,12 +88,12 @@ def visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=None,base_tran
 
     ## Generate a valid joint config
     if joint_config_1 is None:
-        [self_collision, joint_config_1] = arm.generate_random_config(border,objs)
+        [self_collision, joint_config_1] = arm.generate_random_config(border,objs,attempts=attempt_max)
         if self_collision:
             print("Warning: Could not generate a self-collision-free joint configuration for joint_config_1.")
     
     if joint_config_2 is None:
-        [self_collision, joint_config_2] = arm.generate_random_config(border,objs)
+        [self_collision, joint_config_2] = arm.generate_random_config(border,objs,attempts=attempt_max)
         if self_collision:
             print("Warning: Could not generate a self-collision-free joint configuration for joint_config_2.")
 

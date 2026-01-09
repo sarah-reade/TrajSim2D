@@ -137,8 +137,11 @@ def detect_shape_bounded(shape,boundary,method='GJK',inflation=1.0,AABB = None,c
     
     for shape_2 in convex_boundary:
         collision, distance = detect_collision_distance(shape,shape_2,method=method)
-        print("Shape out of bounds:",collision, " | Distance:",distance)
+        
         if collision:
+            print("Shape out of bounds:",collision, " | Distance:",distance)
+            print("Shape:", shape)
+            print("Boundary segment:", shape_2)
             return False
 
     return True
@@ -315,7 +318,7 @@ def detect_any_collisions_distance(shapes,method='GJK'):
             
     return collision_flag, distances
 
-def detect_any_collisions_bounded(boundary,shapes_1,shapes_2):
+def detect_any_collisions_bounded(boundary,shapes_1,shapes_2,convex_boundary=None):
     """
     @brief checks that the shapes_1 are within the boundary and theer are no collisions
     internally between shapes_1 and between shapes_1 and shapes_2
@@ -325,9 +328,7 @@ def detect_any_collisions_bounded(boundary,shapes_1,shapes_2):
     @return bool: if collision is detected or shapes_1 out of bounds
     """
 
-    return detect_any_collisions(shapes_1,shapes_2) and not detect_shapes_bounded(boundary,shapes_1,convex_boundary=create_convex_boundary_objects(boundary))
-
-
+    return detect_any_collisions(shapes_1,shapes_2) and not detect_shapes_bounded(boundary,shapes_1,convex_boundary=convex_boundary)
 
 def get_AABB(shape, inflation=0.0):
     """

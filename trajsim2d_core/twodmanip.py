@@ -121,22 +121,22 @@ class PlanarManipulator:
         alpha = np.pi - beta
         return alpha
 
-    def generate_random_config(self, border= None, objs = [], attempts=100):
+    def generate_random_config(self, border= None, objs = [], attempts=100, convex_boundary=None):
         config = generate_random_number(-self.joint_limit,self.joint_limit,len(self.link_lengths))
         counter = 1
-        while counter < attempts and self.in_collision(config,border,objs):
+        while counter < attempts and self.in_collision(config,border,objs,convex_boundary=convex_boundary):
             config = generate_random_number(-self.joint_limit,self.joint_limit,len(self.link_lengths))
             counter += 1
-        
-        return self.in_collision(config,border,objs),config
 
-    def in_collision(self,config,border= None,objs = []):
+        return self.in_collision(config,border,objs,convex_boundary=convex_boundary),config
+
+    def in_collision(self,config,border= None,objs = [],convex_boundary=None):
         
         ## make geometry
-        arm_geometry=self.make_arm_geometry(config)
+        arm_geometry=self.make_arm_geometry(config,clip_ends=0.02)
         
         ## Check for collisions
-        collision_flag, collision_list = detect_any_collisions(arm_geometry,objs,0.01) ## TODO: CHANGE ME
+        collision_flag = detect_any_collisions_bounded(border,arm_geometry,objs,convex_boundary=convex_boundary) ## TODO: CHANGE ME
         if collision_flag: 
             return True
 

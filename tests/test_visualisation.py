@@ -23,6 +23,7 @@ from matplotlib.patches import Polygon
 from trajsim2d_core.environment import generate_random_border, generate_random_convex_objects
 from trajsim2d_core.visualisation import initialise_visualisation, visualise_object
 from trajsim2d_core.twodmanip import PlanarManipulator
+from trajsim2d_core.collision import create_convex_boundary_objects
 
 
 
@@ -54,7 +55,8 @@ class TestVisualisation(unittest.TestCase):
 
     def test_initialise_visualisation_arm_user_confirm(self):
         # Generate a random bumpy border for testing
-        border = generate_random_border(border_size=10, smoothness=0.1)
+        border = generate_random_border(border_size=10, smoothness=0.001)
+        
         # Generate a random bumpy objects for testing
         objs, concave_objs = generate_random_convex_objects(object_size=0.5,num_objs=5,smoothness=0.001)
         # Generate a random arm for testing
@@ -66,6 +68,8 @@ class TestVisualisation(unittest.TestCase):
         # Initialise the visualisation
         canvas, base_tf, border_id, object_ids, arm_ids  = initialise_visualisation(border=border,objs=objs,arm=arm)
 
+        convex_border = create_convex_boundary_objects(border)
+        canvas.add_shape(convex_border)
         # Show the figure in blocking mode — execution will pause until the window is closed
         plt.show(block=True)
 
