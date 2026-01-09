@@ -382,8 +382,8 @@ class TestBoundary(unittest.TestCase):
         [boundary_object, boundary_right, boundary_left] = create_convex_boundary_objects(boundary)
 
         self.canvas.add_shape(boundary_object, color='black', alpha=0.3)
-        self.canvas.add_shape(boundary_right, color='red', alpha=0.5)
-        self.canvas.add_shape(boundary_left, color='blue', alpha=0.5)
+        #self.canvas.add_shape(boundary_right, color='red', alpha=0.5)
+        #self.canvas.add_shape(boundary_left, color='blue', alpha=0.5)
 
         self.assertTrue(True, "Boundary Object Creation completed with no errors.")
         

@@ -19,7 +19,7 @@
 # Imports
 import numpy as np
 from matplotlib.patches import Polygon, Rectangle, Circle
-from trajsim2d_core.shape_utils import decompose_to_convex_shapes
+from trajsim2d_core.shape_utils import decompose_to_convex_shapes, split_array_at_indices
 
 
 
@@ -130,14 +130,14 @@ def detect_shape_bounded(shape,boundary,boundary_decomposed = None):
         return True
 
     if boundary_decomposed is None:
-        boundary_decomposed = decompose_to_convex_shapes(boundary)
+        boundary_decomposed = create_convex_boundary_objects(boundary)
     
     if shape is None:
         return True
 
 
 
-def create_convex_boundary_objects(boundary, convex = True):
+def create_convex_boundary_objects(boundary):
     """
     @brief creates a large polygon object surrounding the boundary to use for collision detection
     @param boundary is a shape area to create the object around
@@ -168,29 +168,30 @@ def create_convex_boundary_objects(boundary, convex = True):
     # Assemble final polygons
     n = len(boundary)
 
-    boundary_low_to_high  = np.take(boundary, np.arange(lowest_point_idx, highest_point_idx + n + 1) % n, axis=0)
-    boundary_high_to_low  = np.take(boundary, np.arange(highest_point_idx, lowest_point_idx + n + 1) % n, axis=0)
+    boundary_low_to_high, boundary_high_to_low = split_array_at_indices(
+        boundary, lowest_point_idx, highest_point_idx
+    )
 
     # highest point on polygon -> box_connection_point_high -> bbox_right -> box_connection_point_low -> boundary between point low to point high
-    boundary_right = np.vstack([
-        boundary_high_to_low,
-        box_connection_point_high,
-        bbox_right,
-        box_connection_point_low
-    ])
-
-
-    # lowest point on polygon -> box_connection_point_low -> bbox_left -> box_connection_point_high -> boundary between point high to point low
     boundary_left = np.vstack([
-        boundary_low_to_high,
+        boundary_high_to_low,
         box_connection_point_low,
         bbox_left,
         box_connection_point_high
     ])
 
 
-    boundary_objects = decompose_to_convex_shapes(boundary_right)
-    boundary_objects += decompose_to_convex_shapes(boundary_left)
+    # lowest point on polygon -> box_connection_point_low -> bbox_left -> box_connection_point_high -> boundary between point high to point low
+    boundary_right = np.vstack([
+        boundary_low_to_high,
+        box_connection_point_high,
+        bbox_right,
+        box_connection_point_low
+    ])
+
+
+    boundary_objects = decompose_to_convex_shapes(boundary_right,segment_method='decreasing_turn')
+    boundary_objects += decompose_to_convex_shapes(boundary_left,segment_method='decreasing_turn')
 
     return boundary_objects, boundary_right, boundary_left
     

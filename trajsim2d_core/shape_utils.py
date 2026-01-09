@@ -2,7 +2,7 @@
 import numpy as np
 
 ## Function for breaking down concave into convex shapes
-def decompose_to_convex_shapes(shape, max_iterations=10):
+def decompose_to_convex_shapes(shape, max_iterations=10,segment_method='increasing_turn'):
     """
     @brief Decomposes a concave shape into convex shapes.
     @param shape Nx2 np.ndarray representing the concave shape.
@@ -13,7 +13,13 @@ def decompose_to_convex_shapes(shape, max_iterations=10):
     segmented_shape_list = []
     counter = 0
 
-    segmented_shapes = segment_increasing_turn(shape)
+    
+    if segment_method == 'decreasing_turn':
+        segment_shape_by_turn = segment_decreasing_turn
+    else:
+        segment_shape_by_turn = segment_increasing_turn
+
+    segmented_shapes = segment_shape_by_turn(shape)
 
     while len(segmented_shapes) > 1 and counter < max_iterations:
         
@@ -28,7 +34,7 @@ def decompose_to_convex_shapes(shape, max_iterations=10):
         
         new_polygon.append(segmented_shapes[0][0])
         
-        segmented_shapes = segment_increasing_turn(new_polygon)
+        segmented_shapes = segment_shape_by_turn(new_polygon)
         counter += 1
 
     segmented_shape_list.append(np.vstack(new_polygon.copy()))
@@ -369,3 +375,16 @@ def segment_increasing_turn(points):
 
     segments.append(np.array(current_segment + partial_first_segment))
     return segments
+
+def split_array_at_indices(boundary, idx_a, idx_b):
+    """
+    Returns the two paths between idx_a and idx_b on a closed polygon.
+    """
+    if idx_a <= idx_b:
+        path_a_to_b = boundary[idx_a:idx_b + 1]
+        path_b_to_a = np.vstack((boundary[idx_b:], boundary[:idx_a + 1]))
+    else:
+        path_a_to_b = np.vstack((boundary[idx_a:], boundary[:idx_b + 1]))
+        path_b_to_a = boundary[idx_b:idx_a + 1]
+
+    return path_a_to_b, path_b_to_a
