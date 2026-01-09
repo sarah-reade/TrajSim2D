@@ -19,8 +19,8 @@
 # Imports
 import numpy as np
 from matplotlib.patches import Polygon, Rectangle, Circle
-from trajsim2d_core.shape_utils import decompose_to_convex_shapes, split_array_at_indices
-
+from trajsim2d_core.shape_utils import decompose_to_convex_shapes, segment_decreasing_turn
+from trajsim2d_core.utils import normal_angle_at_point
 
 
 ## Detect Collision
@@ -35,7 +35,7 @@ def detect_collision_AABB(shape_1,shape_2,inflation=0.1):
     return collision_flag, overlaps
 
 
-def detect_collision_DISTANCE(shape_1,shape_2,intersecting_area=None,method='GJK'):
+def detect_collision_distance(shape_1,shape_2,intersecting_area=None,method='GJK'):
     """
     @brief Check for collisions between two shapes using a complex method and measuring distance between
     @param shape_1 is a shape to check for collisions against shape_2
@@ -49,7 +49,7 @@ def detect_collision_DISTANCE(shape_1,shape_2,intersecting_area=None,method='GJK
 
     # detect between a circle v circle
     if isinstance(shape_1,Circle) and isinstance(shape_2,Circle):
-        return detect_circle_collision_DISTANCE(shape_1,shape_2)
+        return detect_circle_collision_distance(shape_1,shape_2)
     
 
     # convert all shapes into np.ndarray of points
@@ -99,7 +99,7 @@ def convert_shape_to_numpy(shape):
         raise NotImplementedError("Conversion to numpy not implemented for this shape type.")
 
 
-def detect_circle_collision_DISTANCE(circle_1,circle_2):
+def detect_circle_collision_distance(circle_1,circle_2):
     """
     @brief Check for collisions between two circles using distance method
     @param circle_1 is a Circle to check for collisions against circle_2
@@ -119,7 +119,7 @@ def detect_circle_collision_DISTANCE(circle_1,circle_2):
 
     return collision, distance
 
-def detect_shape_bounded(shape,boundary,boundary_decomposed = None):
+def detect_shape_bounded(shape,boundary,method='GJK',inflation=1.0,AABB = None,convex_boundary =None):
     """
     @brief checks that the shape is contained in the boundary 
     @param boundary is a shape area to check the shape is contained within
@@ -129,74 +129,104 @@ def detect_shape_bounded(shape,boundary,boundary_decomposed = None):
     if boundary is None:
         return True
 
-    if boundary_decomposed is None:
-        boundary_decomposed = create_convex_boundary_objects(boundary)
+    if convex_boundary is None:
+        convex_boundary = segment_decreasing_turn(boundary)
     
     if shape is None:
         return True
+    
+    for shape_2 in convex_boundary:
+        collision, distance = detect_collision_distance(shape,shape_2,method=method)
+        print("Shape out of bounds:",collision, " | Distance:",distance)
+        if collision:
+            return False
 
+    return True
+    
 
-
-def create_convex_boundary_objects(boundary):
+def create_convex_boundary_objects(boundary,inflation=1.0,AABB = None):
     """
     @brief creates a large polygon object surrounding the boundary to use for collision detection
     @param boundary is a shape area to create the object around
     @return list of np.ndarray of boundary object points
     """
     ## Create a large box to create an object surrounding the boundary
-    minx, miny, maxx, maxy = get_AABB(boundary,inflation=5.0)
+    if AABB is None:
+        minx, miny, maxx, maxy = get_AABB(boundary,inflation=inflation)
+    else:
+        minx, miny, maxx, maxy = AABB
 
-    ## get the highest and lowest point of the np.ndarray boundary
-    highest_point_idx = np.argmax(boundary[:,1])
-    lowest_point_idx = np.argmin(boundary[:,1])
+    # Get the outer points
+    segmented_boundary = segment_decreasing_turn(boundary)
 
-    ## take x value and max y of bounding box to create a point to joint the boundary to the bounding box
-    box_connection_point_high = np.array([[boundary[highest_point_idx,0], maxy]])
-    box_connection_point_low = np.array([[boundary[lowest_point_idx,0], miny]])
-
-    ## Add points to create a large polygon around the boundary
-    # Bounding box corners (clockwise)
-    bbox_left = np.array([
-        [minx, miny],
-        [minx, maxy]
-    ])
-    bbox_right = np.array([
-        [maxx, maxy],
-        [maxx, miny]
-    ])
-
-    # Assemble final polygons
-    n = len(boundary)
-
-    boundary_low_to_high, boundary_high_to_low = split_array_at_indices(
-        boundary, lowest_point_idx, highest_point_idx
-    )
-
-    # highest point on polygon -> box_connection_point_high -> bbox_right -> box_connection_point_low -> boundary between point low to point high
-    boundary_left = np.vstack([
-        boundary_high_to_low,
-        box_connection_point_low,
-        bbox_left,
-        box_connection_point_high
-    ])
-
-
-    # lowest point on polygon -> box_connection_point_low -> bbox_left -> box_connection_point_high -> boundary between point high to point low
-    boundary_right = np.vstack([
-        boundary_low_to_high,
-        box_connection_point_high,
-        bbox_right,
-        box_connection_point_low
-    ])
-
-
-    boundary_objects = decompose_to_convex_shapes(boundary_right,segment_method='decreasing_turn')
-    boundary_objects += decompose_to_convex_shapes(boundary_left,segment_method='decreasing_turn')
-
-    return boundary_objects, boundary_right, boundary_left
+    # Find the tangent at the outpoints
+    n = len(segmented_boundary)
+    tangent_list = [[None] * n, [None] * n]
+    angle = 0.0
+    for i, seg in enumerate(segmented_boundary):
+        idx = np.where(seg[0] == boundary)[0][0]
+        angle = normal_angle_at_point(boundary,idx)
+        tangent_list[0][i] = angle
+        tangent_list[1][i-1] = angle
     
+    
+    boundary_objects = []
+    # For each segment start to build the object
+    for i, seg in enumerate(segmented_boundary):
+        
+        boundary_object = []
+        # Find the point on the AABB that the tangent hits
+        aabb_point_1 = aabb_intersection_in_direction(minx, miny, maxx, maxy, seg[0,0],seg[0,1],tangent_list[0][i])
+        
+        boundary_object = [aabb_point_1]
+        
+        boundary_object = np.vstack([boundary_object, seg])
 
-def detect_shapes_bounded(boundary,shapes):
+        
+        # Find the point on the AABB that the tangent hits
+        aabb_point_2 = aabb_intersection_in_direction(minx, miny, maxx, maxy, seg[-1,0],seg[-1,1],tangent_list[1][i])
+        boundary_object = np.vstack([boundary_object, [aabb_point_2]])
+
+        ##Fill in the boundary points in between
+        tol = 1e-9  # tolerance for floating-point comparison
+        count = 0
+        while not (np.isclose(aabb_point_1[0], aabb_point_2[0], atol=tol) or
+           np.isclose(aabb_point_1[1], aabb_point_2[1], atol=tol)):
+            count += 1
+            if count > 4:
+                raise Exception("Infinite loop detected in creating boundary object")
+
+            
+
+            if np.isclose(aabb_point_2[1], miny, atol=tol):
+                aabb_point_2 = [minx, miny]
+            elif np.isclose(aabb_point_2[0], minx, atol=tol):
+                aabb_point_2 = [minx, maxy]
+            elif np.isclose(aabb_point_2[1], maxy, atol=tol):
+                aabb_point_2 = [maxx, maxy]
+            elif np.isclose(aabb_point_2[0], maxx, atol=tol):
+                aabb_point_2 = [maxx, miny]
+            else:
+                print("Warning: aabb_point_2 did not match any boundary conditions")
+                break
+
+
+            boundary_object = np.vstack([boundary_object, [aabb_point_2]])
+            
+
+        boundary_object = np.vstack([boundary_object, [aabb_point_1]])
+        boundary_objects += [boundary_object]
+
+
+    
+    convex_boundary_objects = []
+    for boundary_object in boundary_objects:
+        convex_boundary_objects += decompose_to_convex_shapes(boundary_object)
+
+    return convex_boundary_objects
+
+
+def detect_shapes_bounded(boundary,shapes,inflation=1.0,AABB=None,convex_boundary=None):
     """
     @brief checks that the shapes are contained in the boundary 
     @param boundary is a shape area to check the shapes are contained within
@@ -210,7 +240,7 @@ def detect_shapes_bounded(boundary,shapes):
         return True
     
     for shape in shapes:
-        if not detect_shape_bounded(shape,boundary,boundary_decomposed = decompose_to_convex_shapes(boundary)):
+        if not detect_shape_bounded(shape,boundary,inflation=inflation,AABB=AABB,convex_boundary=convex_boundary):
             return False
 
     return True
@@ -233,7 +263,7 @@ def detect_any_collisions(shapes_1,shapes_2,max_distance=0.2,method='GJK'):
         return False,[]
     
     # For all potentially intersecting shapes check for more in detail collisions:
-    any_collisions_flag, collision_distances = detect_any_collisions_DISTANCE(pot_collision_shapes,method)
+    any_collisions_flag, collision_distances = detect_any_collisions_distance(pot_collision_shapes,method)
 
     return any_collisions_flag, collision_distances
 
@@ -262,7 +292,7 @@ def detect_any_collisions_AABB(shapes_1,shapes_2,inflation=0.1):
             
     return bool(potential_collisions), potential_collisions
             
-def detect_any_collisions_DISTANCE(shapes,method='GJK'):
+def detect_any_collisions_distance(shapes,method='GJK'):
     """
     @brief Checks for collisions or distances between shape pairs using a distance-based algorithm (placeholder).
 
@@ -277,7 +307,7 @@ def detect_any_collisions_DISTANCE(shapes,method='GJK'):
 
     for shape_1, shape_2, intersecting_area in shapes:
             
-        collision, distance = detect_collision_DISTANCE(shape_1,shape_2,intersecting_area,method)
+        collision, distance = detect_collision_distance(shape_1,shape_2,intersecting_area,method)
         
         if collision:
             collision_flag = True
@@ -295,7 +325,7 @@ def detect_any_collisions_bounded(boundary,shapes_1,shapes_2):
     @return bool: if collision is detected or shapes_1 out of bounds
     """
 
-    return detect_any_collisions(shapes_1,shapes_2) and not detect_shapes_bounded(boundary,shapes_1)
+    return detect_any_collisions(shapes_1,shapes_2) and not detect_shapes_bounded(boundary,shapes_1,convex_boundary=create_convex_boundary_objects(boundary))
 
 
 
@@ -633,8 +663,6 @@ def clip(poly_points, poly_size, x1, y1, x2, y2):
         # Calculating position of second point w.r.t. clipper line
         k_pos = (x2-x1) * (ky-y1) - (y2-y1) * (kx-x1)
 
-        print("i_pos:", i_pos)
-        print("k_pos:", k_pos) 
         # Case 1 : When both points are inside
         if i_pos < 0 and k_pos < 0:
             # Only second point is added
@@ -683,3 +711,52 @@ def suthHodgClip(poly_points, poly_size, clipper_points, clipper_size):
     return poly_points[:poly_size]
 
 
+def aabb_intersection_in_direction(minx, miny, maxx, maxy, x0, y0, theta, tol=1e-9):
+    """
+    @brief Computes the intersection point of a line with an axis-aligned bounding box (AABB)
+           in the specified direction from a given point.
+
+    @param minx Minimum x-coordinate of the box
+    @param miny Minimum y-coordinate of the box
+    @param maxx Maximum x-coordinate of the box
+    @param maxy Maximum y-coordinate of the box
+    @param x0   x-coordinate of a point on the line
+    @param y0   y-coordinate of a point on the line
+    @param theta Angle of the line in radians (0 along positive x-axis)
+    @param tol   Floating-point tolerance for comparisons (default: 1e-9)
+
+    @return np.ndarray or None
+           A numpy array [x, y] representing the intersection point in the
+           forward direction along the line. Returns None if the line does
+           not intersect the box.
+    """
+    dx = np.cos(theta)
+    dy = np.sin(theta)
+    dir_vec = np.array([dx, dy])
+
+    # List to store valid intersections
+    intersections = []
+
+    # Check intersections with vertical edges (x = minx, maxx)
+    if abs(dx) > tol:
+        for x_edge in [minx, maxx]:
+            t = (x_edge - x0) / dx
+            y = y0 + t * dy
+            if miny - tol <= y <= maxy + tol:
+                intersections.append((t, x_edge, y))
+
+    # Check intersections with horizontal edges (y = miny, maxy)
+    if abs(dy) > tol:
+        for y_edge in [miny, maxy]:
+            t = (y_edge - y0) / dy
+            x = x0 + t * dx
+            if minx - tol <= x <= maxx + tol:
+                intersections.append((t, x, y_edge))
+
+    if not intersections:
+        return None  # line does not intersect the box
+
+    # Select the intersection in the forward direction along the line
+    best = max(intersections, key=lambda p: np.dot([p[1]-x0, p[2]-y0], dir_vec))
+    _, x, y = best
+    return np.array([x, y])

@@ -37,7 +37,8 @@ def decompose_to_convex_shapes(shape, max_iterations=10,segment_method='increasi
         segmented_shapes = segment_shape_by_turn(new_polygon)
         counter += 1
 
-    segmented_shape_list.append(np.vstack(new_polygon.copy()))
+    if new_polygon:
+        segmented_shape_list.append(np.vstack(new_polygon.copy()))
     return segmented_shape_list
 
 
