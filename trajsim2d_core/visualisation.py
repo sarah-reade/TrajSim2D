@@ -33,7 +33,7 @@ from trajsim2d_core.collision import detect_any_collisions, detect_any_collision
 import numpy as np
 
 # Initialise visualisation 
-def initialise_visualisation(border=None,objs=None,base_transform=None,arm=None,joint_config_1=None,joint_config_2=None):
+def initialise_visualisation(border=None,objs=None,base_transform=None,arm=None,joint_config_1=None,joint_config_2=None,attempt_max = 10):
     """
     @brief Initialise a 2D visualisation with a border.
     @param border Nx2 np.ndarray defining the boundary.
@@ -58,7 +58,7 @@ def initialise_visualisation(border=None,objs=None,base_transform=None,arm=None,
     ## Add Arm (if one of border and objects exist)
     arm_ids = []
     if arm is not None:
-        arm_ids, base_transform = visualise_arm(canvas,arm,border,objs,base_transform,joint_config_1,joint_config_2)
+        arm_ids, base_transform = visualise_arm(canvas,arm,border,objs,base_transform,joint_config_1,joint_config_2,attempt_max=attempt_max)
         base_id = canvas.add_tf(base_transform)
 
     return canvas, base_transform, border_id, object_ids, arm_ids

@@ -66,7 +66,7 @@ class TestVisualisation(unittest.TestCase):
         # config_2 = [-arm.joint_limit for _ in range(arm.n)]
 
         # Initialise the visualisation
-        canvas, base_tf, border_id, object_ids, arm_ids  = initialise_visualisation(border=border,objs=objs,arm=arm)
+        canvas, base_tf, border_id, object_ids, arm_ids  = initialise_visualisation(border=border,objs=objs,arm=arm,attempt_max=1)
 
         convex_border = create_convex_boundary_objects(border)
         canvas.add_shape(convex_border)

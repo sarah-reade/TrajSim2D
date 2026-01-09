@@ -108,5 +108,6 @@ class TestPlanarManipulatorKinematics(unittest.TestCase):
         expected_y = self.link_lengths[0] / 2
         self.assertAlmostEqual(first_link_tf[1, 2], expected_y, places=6)
 
+
 if __name__ == '__main__':
     unittest.main()
