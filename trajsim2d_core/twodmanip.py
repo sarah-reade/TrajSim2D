@@ -29,6 +29,8 @@ from trajsim2d_core.utils import generate_random_number, generate_random_int , g
 from trajsim2d_core.collision import detect_any_collisions_bounded, detect_any_collisions
 from matplotlib.patches import Polygon, Rectangle, Circle
 
+
+
 class PlanarManipulator:
     """
     @brief Represents a 2D planar robotic manipulator composed of multiple links and joints.
@@ -37,6 +39,7 @@ class PlanarManipulator:
     the widths, lengths, and joint sizes for each link. It can generate random configurations
     when none are provided by the user.
     """
+    
 
     def __init__(self, base_tf=None, base_offset= None, link_width=None, link_lengths=None, joint_radius=None, n=None):
         """
@@ -48,6 +51,7 @@ class PlanarManipulator:
         If no dimensions are provided, the manipulator is initialized with random geometry
         using `generate_random_arm()`.
         """
+        self.CLIP_ENDS_DEFAULT = 0.01
         
         if link_width is None or link_lengths is None or joint_radius:
             self.base_offset,self.link_width,self.link_lengths,self.joint_radius, self.n = self.generate_random_arm(base_offset,link_width,link_lengths,joint_radius, n)
@@ -59,6 +63,8 @@ class PlanarManipulator:
         self.base_tf = base_tf
         if base_tf is None:
             self.base_tf = np.eye(3)
+            
+        
 
 
     def generate_random_arm(self, base_offset=None,link_width=None, link_lengths=None, joint_radius=None, n=None):
@@ -80,7 +86,7 @@ class PlanarManipulator:
         if base_offset is None:
             base_offset = generate_random_number(0.0,4.0)
         if link_width is None:
-            link_width = generate_random_number(0.01,0.2)
+            link_width = generate_random_number(self.CLIP_ENDS_DEFAULT*2,0.2)
         if link_lengths is None:
             link_lengths= generate_random_number(link_width,1,n)
         if joint_radius is None:
@@ -121,28 +127,28 @@ class PlanarManipulator:
         alpha = np.pi - beta
         return alpha
 
-    def generate_random_config(self, border= None, objs = [], attempts=100, convex_boundary=None):
+    def generate_random_config(self, border= None, objs = [], base_transform=None, attempts=100, convex_boundary=None):
         config = generate_random_number(-self.joint_limit,self.joint_limit,len(self.link_lengths))
         counter = 1
-        while counter < attempts and self.in_collision(config,border,objs,convex_boundary=convex_boundary):
+        while counter < attempts and self.in_collision(config,border,objs,base_transform=base_transform,convex_boundary=convex_boundary):
             config = generate_random_number(-self.joint_limit,self.joint_limit,len(self.link_lengths))
             counter += 1
 
-        return self.in_collision(config,border,objs,convex_boundary=convex_boundary),config
+        return self.in_collision(config,border,objs,base_transform=base_transform,convex_boundary=convex_boundary),config
 
-    def in_collision(self,config,border= None,objs = [],convex_boundary=None):
+    def in_collision(self,config,border= None,objs = [],base_transform=None,convex_boundary=None):
         
         ## make geometry
-        arm_geometry=self.make_arm_geometry(config,clip_ends=0.02)
+        arm_geometry=self.make_arm_geometry(config,base_tf=base_transform,clip_ends=self.CLIP_ENDS_DEFAULT)
+        
+        [self.collision_state, self.collision_list] = detect_any_collisions_bounded(border,arm_geometry,objs,convex_boundary=convex_boundary)
+        
+        #print("Number of collisions detected:", len(self.collision_list))
         
         ## Check for collisions
-        collision_flag = detect_any_collisions_bounded(border,arm_geometry,objs,convex_boundary=convex_boundary) ## TODO: CHANGE ME
-        if collision_flag: 
-            return True
+        return self.collision_state
 
-        return False
-
-    def make_arm_geometry(self,config,base_tf=None,clip_ends=0.05):
+    def make_arm_geometry(self,config,base_tf=None,clip_ends=0.01):
         if base_tf is None:
             base_tf=self.base_tf
 
@@ -246,16 +252,17 @@ class PlanarManipulator:
         rectangles = [Rectangle(
             xy=getRectAnchor(tf,self.link_width,self.base_offset - self.joint_radius - 2*clip_ends),
             width=self.link_width,
-            height=self.base_offset - self.joint_radius - clip_ends,
+            height=self.base_offset - self.joint_radius - 2*clip_ends,
             angle=getRectAngle(tf)
         )]
 
         # link rectangles
+        
         rectangles += [
             Rectangle(
-                xy=getRectAnchor(tf,self.link_width,self.link_lengths[i] - 2 * self.joint_radius),
+                xy=getRectAnchor(tf,self.link_width,self.link_lengths[i] - 2 * self.joint_radius - 2*clip_ends),
                 width=self.link_width,
-                height=self.link_lengths[i] - 2 * self.joint_radius,
+                height=self.link_lengths[i] - 2 * self.joint_radius- 2*clip_ends,
                 angle=getRectAngle(tf)
             )
             for i, tf in enumerate(link_tfs[1:-1])  # enumerate for i
@@ -264,9 +271,9 @@ class PlanarManipulator:
         
         # EE link 
         rectangles += [Rectangle(
-            xy=getRectAnchor(link_tfs[-1],self.link_width,self.link_lengths[-1] - 2*self.joint_radius),
+            xy=getRectAnchor(link_tfs[-1],self.link_width,self.link_lengths[-1] - 2*self.joint_radius - 2*clip_ends),
             width=self.link_width,
-            height=np.maximum(0.0,self.link_lengths[-1] - self.joint_radius - clip_ends),
+            height=np.maximum(0.0,self.link_lengths[-1] - self.joint_radius - 2*clip_ends),
             angle=getRectAngle(link_tfs[-1])
         )]
 

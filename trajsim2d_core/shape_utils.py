@@ -1,4 +1,4 @@
-
+from matplotlib.patches import Rectangle, Circle
 import numpy as np
 
 ## Function for breaking down concave into convex shapes
@@ -389,3 +389,109 @@ def split_array_at_indices(boundary, idx_a, idx_b):
         path_b_to_a = boundary[idx_b:idx_a + 1]
 
     return path_a_to_b, path_b_to_a
+
+def get_shape_size(shape):
+    '''
+    @brief Returns a measure of the size of the shape.
+    @param shape: np.ndarray or shape object
+    @return size: float representing size (e.g., number of points, area, etc
+    '''
+    if isinstance(shape, np.ndarray):
+        return len(shape)  # number of points
+    elif hasattr(shape, "radius"):  # Circle
+        return 100
+    elif hasattr(shape, "width") and hasattr(shape, "height"):  # Rectangle
+        return 4
+    else:
+        return 0  # fallback if unknown type
+    
+    
+def is_convex(a, b, c):
+    return np.cross(b - a, c - b) >= 0
+
+def point_in_triangle(p, a, b, c):
+    v0 = c - a
+    v1 = b - a
+    v2 = p - a
+
+    dot00 = np.dot(v0, v0)
+    dot01 = np.dot(v0, v1)
+    dot02 = np.dot(v0, v2)
+    dot11 = np.dot(v1, v1)
+    dot12 = np.dot(v1, v2)
+
+    inv = 1.0 / (dot00 * dot11 - dot01 * dot01)
+    u = (dot11 * dot02 - dot01 * dot12) * inv
+    v = (dot00 * dot12 - dot01 * dot02) * inv
+
+    return (u >= 0) and (v >= 0) and (u + v <= 1)
+    
+def triangulate_simple_polygon(poly):
+    """
+    Ear clipping triangulation.
+    Returns list of triangles (each (3,2) np.ndarray)
+    """
+    poly = poly.tolist()
+    triangles = []
+
+    while len(poly) > 3:
+        n = len(poly)
+        ear_found = False
+
+        for i in range(n):
+            prev = np.array(poly[(i - 1) % n])
+            curr = np.array(poly[i])
+            next = np.array(poly[(i + 1) % n])
+
+            if not is_convex(prev, curr, next):
+                continue
+
+            if any(
+                point_in_triangle(np.array(p), prev, curr, next)
+                for j, p in enumerate(poly)
+                if j not in [(i - 1) % n, i, (i + 1) % n]
+            ):
+                continue
+
+            triangles.append(np.array([prev, curr, next]))
+            del poly[i]
+            ear_found = True
+            break
+
+        if not ear_found:
+            raise RuntimeError("Triangulation failed")
+
+    triangles.append(np.array(poly))
+    return triangles
+
+
+def shape_in_tuple_list(shapes, tuple_list):
+    """
+    @brief Checks if given shapes is present in a list of tuples.
+
+    Supports matplotlib.patches.Rectangle, matplotlib.patches.Circle, and numpy.ndarray.
+
+    @param shape The shape to check (Rectangle, Circle, or np.ndarray).
+    @param tuple_list A list of tuples, each containing two shapes and a distance.
+    @return True if the shape exists in any tuple in the list; False otherwise.
+    """
+    for tup in tuple_list:
+        shapes_in_tup = tup[:2]  # first two elements are shapes
+        for candidate_shape in shapes_in_tup:
+            for shape in shapes:
+                # print("Comparing ", shape, " with ", candidate_shape)
+                if type(shape) == type(candidate_shape):
+                    if isinstance(shape, Rectangle):
+                        if (shape.get_xy() == candidate_shape.get_xy() and
+                            shape.get_width() == candidate_shape.get_width() and
+                            shape.get_height() == candidate_shape.get_height() and
+                            shape.get_angle() == candidate_shape.get_angle()):
+                            return True
+                    elif isinstance(shape, Circle):
+                        if (shape.center == candidate_shape.center and
+                            shape.get_radius() == candidate_shape.get_radius()):
+                            return True
+                    elif isinstance(shape, np.ndarray):
+                        if np.array_equal(shape, candidate_shape):
+                            return True
+    return False

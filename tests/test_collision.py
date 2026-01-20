@@ -74,7 +74,9 @@ class TestCollisionDetection(unittest.TestCase):
          cls.base_tf,
          cls.border_id,
          cls.object_ids,
-         cls.arm_ids) = initialise_visualisation(
+         cls.arm_ids,
+         cls.config_1,
+         cls.config_2) = initialise_visualisation(
             border=cls.border,
             objs=cls.objs,
             arm=cls.arm,

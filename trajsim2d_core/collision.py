@@ -19,7 +19,7 @@
 # Imports
 import numpy as np
 from matplotlib.patches import Polygon, Rectangle, Circle
-from trajsim2d_core.shape_utils import decompose_to_convex_shapes, segment_decreasing_turn
+from trajsim2d_core.shape_utils import decompose_to_convex_shapes, segment_decreasing_turn, get_shape_size
 from trajsim2d_core.utils import normal_angle_at_point
 import time
 
@@ -274,12 +274,14 @@ def detect_any_collisions(shapes_1,shapes_2,max_distance=0.2,method='GJK'):
     any_collisions_flag, pot_collision_shapes = detect_any_collisions_AABB(shapes_1,shapes_2,inflation=max_distance)
 
     if not any_collisions_flag:
+        print("No potential collisions detected using AABB.")
         return False,[]
     
     # For all potentially intersecting shapes check for more in detail collisions:
-    any_collisions_flag, collision_distances = detect_any_collisions_distance(pot_collision_shapes,method)
-
-    return any_collisions_flag, collision_distances
+    any_collisions_flag, collision_list = detect_any_collisions_distance(pot_collision_shapes,method)
+    
+    #print(f"Total collisions detected: {len(collision_list)}")
+    return any_collisions_flag, collision_list
 
 def detect_any_collisions_AABB(shapes_1,shapes_2,inflation=0.1):
     """
@@ -315,19 +317,30 @@ def detect_any_collisions_distance(shapes,method='GJK'):
     @return bool True if any collision is detected, False otherwise.
     @return list distances List of tuples (shape_1, shape_2, distance) giving the computed distance or overlap between each shape pair.
     """
+    start = time.perf_counter()
 
     collision_flag = False
-    distances = []
+    collision_list = []
 
     for shape_1, shape_2, intersecting_area in shapes:
-            
+        
+        
         collision, distance = detect_collision_distance(shape_1,shape_2,intersecting_area,method)
         
         if collision:
             collision_flag = True
-        distances.append((shape_1,shape_2,distance))
+            collision_list.append((shape_1,shape_2,distance))
             
-    return collision_flag, distances
+    elapsed_ms = (time.perf_counter() - start) * 1000.0
+    print(
+        f"detect_any_collisions_distance took {elapsed_ms:.3f} ms | "
+        f"number of shape pairs: {len(shapes)} | "
+        f"Largest shape sizes: "
+        f"{max([get_shape_size(s[0]) for s in shapes])}, "
+        f"{max([get_shape_size(s[1]) for s in shapes])}"
+    )
+    
+    return collision_flag, collision_list
 
 def detect_any_collisions_bounded(boundary,shapes_1,shapes_2,convex_boundary=None):
     """
@@ -338,8 +351,13 @@ def detect_any_collisions_bounded(boundary,shapes_1,shapes_2,convex_boundary=Non
     @param shapes_2 is a list of shapes to check for collisions of against shapes_1
     @return bool: if collision is detected or shapes_1 out of bounds
     """
+    
+    if convex_boundary is None:
+        convex_boundary = create_convex_boundary_objects(boundary)
+    
+    shapes_2 = shapes_2 + convex_boundary
 
-    return detect_any_collisions(shapes_1,shapes_2) and not detect_shapes_bounded(boundary,shapes_1,convex_boundary=convex_boundary)
+    return detect_any_collisions(shapes_1,shapes_2) 
 
 def get_AABB(shape, inflation=0.0):
     """
@@ -603,6 +621,9 @@ def gjk_distance(shape_1, shape_2):
     
     if len(shape_1) == 0 or len(shape_2) == 0:
         return False, float('inf')
+    
+    # print("shape_1:", shape_1)
+    # print("shape_2:", shape_2)
     
     # Initial direction (from shape1 center to shape2 center)
     direction = np.mean(shape_2, axis=0) - np.mean(shape_1, axis=0)

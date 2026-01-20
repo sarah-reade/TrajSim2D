@@ -30,6 +30,7 @@ from trajsim2d_core.utils import make_transform_2d, generate_random_number
 from trajsim2d_core.environment import generate_random_edge_point
 from trajsim2d_core.twodmanip import PlanarManipulator
 from trajsim2d_core.collision import detect_any_collisions, detect_any_collisions_bounded, create_convex_boundary_objects
+from trajsim2d_core.shape_utils import shape_in_tuple_list
 import numpy as np
 
 # Initialise visualisation 
@@ -58,13 +59,13 @@ def initialise_visualisation(border=None,objs=None,base_transform=None,arm=None,
     ## Add Arm (if one of border and objects exist)
     arm_ids = []
     if arm is not None:
-        arm_ids, base_transform = visualise_arm(canvas,arm,border,objs,base_transform,joint_config_1,joint_config_2,attempt_max=attempt_max)
+        arm_ids, base_transform, joint_config_1, joint_config_2 = initialise_visualise_arm(canvas,arm,border,objs,base_transform,joint_config_1,joint_config_2,attempt_max=attempt_max)
         base_id = canvas.add_tf(base_transform)
 
-    return canvas, base_transform, border_id, object_ids, arm_ids
+    return canvas, base_transform, border_id, object_ids, arm_ids, joint_config_1, joint_config_2
 
 # Initialise Arm
-def visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=None,base_transform=None,joint_config_1=None,joint_config_2=None,attempt_max = 10):
+def initialise_visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=None,base_transform=None,joint_config_1=None,joint_config_2=None,attempt_max = 10):
     """
     @ brief adds an arm to the canvas
     """
@@ -80,28 +81,42 @@ def visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=None,base_tran
                 print(f"Attempt {attempts+1} to place arm without collision.")
                 point, angle = generate_random_edge_point(border,objs)
                 base_transform = make_transform_2d(point[0],point[1],angle)
-                [collision, _] = arm.generate_random_config(border,objs,attempts=attempt_max,convex_boundary=convex_border)
-                attempts += 1
-            
-
-
-
-    ## Generate a valid joint config
-    if joint_config_1 is None:
-        [self_collision, joint_config_1] = arm.generate_random_config(border,objs,attempts=attempt_max)
-        if self_collision:
-            print("Warning: Could not generate a self-collision-free joint configuration for joint_config_1.")
+                [collision, config] = arm.generate_random_config(border,objs,base_transform=base_transform,attempts=1,convex_boundary=convex_border)
+                if collision:
+                    print("Number of Collisions:", len(arm.collision_list))
+                    arm_geometry = arm.make_arm_geometry(config=config,base_tf=base_transform,clip_ends=arm.CLIP_ENDS_DEFAULT)
+                    
+                    # print("base link", arm_geometry[arm.n])
+                    # print("joint 1", arm_geometry[0])
+                    
+                    if shape_in_tuple_list([arm_geometry[arm.n],arm_geometry[0]],arm.collision_list):
+                        
+                        attempts += 1
+                        continue
+                    
+                break
     
-    if joint_config_2 is None:
-        [self_collision, joint_config_2] = arm.generate_random_config(border,objs,attempts=attempt_max)
-        if self_collision:
-            print("Warning: Could not generate a self-collision-free joint configuration for joint_config_2.")
+    ids_1, joint_config_1 = visualise_arm(canvas,arm,base_transform,border,objs,attempt_max,convex_boundary=convex_border,joint_config=joint_config_1,color='blue', alpha=0.5)
+    ids_2, joint_config_2 = visualise_arm(canvas,arm,base_transform,border,objs,attempt_max,convex_boundary=convex_border,joint_config=joint_config_2,color='green', alpha=0.5)
 
-    ## visualise on canvas
-    arm_geometry_1 = arm.make_arm_geometry(joint_config_1,base_transform,clip_ends=0.0)
-    arm_geometry_2 = arm.make_arm_geometry(joint_config_2,base_transform,clip_ends=0.0)
+    return ids_1 + ids_2, base_transform, joint_config_1, joint_config_2
 
-    return visualise_object(canvas,arm_geometry_1,'green') + visualise_object(canvas,arm_geometry_2,'yellow'),base_transform
+def visualise_arm(canvas,arm=PlanarManipulator(),base_transform=None,border=None,objs=None,attempt_max=10,convex_boundary=None,joint_config=None,color='red', alpha=0.5):
+    
+    self_collision = False
+    
+    if joint_config is None:
+        [self_collision, joint_config] = arm.generate_random_config(border,objs,base_transform=base_transform,attempts=attempt_max,convex_boundary=convex_boundary)
+        
+    arm_geometry = arm.make_arm_geometry(joint_config,base_transform,clip_ends=0.0)
+    id = visualise_object(canvas,arm_geometry,color, alpha)
+    if self_collision:
+        print("Warning: Could not generate a self-collision-free joint configuration.")
+        for [shape_1,shape_2,distance] in arm.collision_list:
+            id += [visualise_object(canvas,shape_1,'red',alpha=0.5)]
+            id += [visualise_object(canvas,shape_2,'red',alpha=0.5)]
+            
+    return id, joint_config
 
 def visualise_object(canvas,obj,color='red', alpha=0.5):
     return canvas.add_shape(obj,color,alpha)

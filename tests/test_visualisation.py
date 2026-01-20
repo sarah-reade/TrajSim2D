@@ -33,7 +33,7 @@ class TestVisualisation(unittest.TestCase):
     #     border = generate_random_border(border_size=5, smoothness=0.5)
 
     #     # Initialise the visualisation
-    #     canvas, base_tf, border_id, object_ids, arm_ids  = initialise_visualisation(border)
+    #     canvas, base_tf, border_id, object_ids, arm_ids, joint_config_1, joint_config_2  = initialise_visualisation(border)
         
     #     # Ask the user for confirmation
     #     user_input = input("Do you see the border correctly? (y/n): ").strip().lower()
@@ -45,7 +45,7 @@ class TestVisualisation(unittest.TestCase):
     #     # Generate a random bumpy objects for testing
     #     objs = generate_random_objects(object_size=0.5,num_objs=5,smoothness=0.5)
     #     # Initialise the visualisation
-    #     canvas, base_tf, border_id, object_ids, arm_ids  = initialise_visualisation(objs=objs)
+    #     canvas, base_tf, border_id, object_ids, arm_ids, joint_config_1, joint_config_2  = initialise_visualisation(objs=objs)
         
     #     # Ask the user for confirmation
     #     user_input = input("Do you see the objects correctly? (y/n): ").strip().lower()
@@ -66,7 +66,7 @@ class TestVisualisation(unittest.TestCase):
         # config_2 = [-arm.joint_limit for _ in range(arm.n)]
 
         # Initialise the visualisation
-        canvas, base_tf, border_id, object_ids, arm_ids  = initialise_visualisation(border=border,objs=objs,arm=arm,attempt_max=10)
+        canvas, base_tf, border_id, object_ids, arm_ids, joint_config_1, joint_config_2  = initialise_visualisation(border=border,objs=objs,arm=arm,attempt_max=20)
 
         convex_border = create_convex_boundary_objects(border)
         canvas.add_shape(convex_border)
