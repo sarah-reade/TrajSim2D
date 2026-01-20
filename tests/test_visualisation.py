@@ -71,7 +71,7 @@ class TestVisualisation(unittest.TestCase):
         convex_border = create_convex_boundary_objects(border)
         canvas.add_shape(convex_border)
         # Show the figure in blocking mode — execution will pause until the window is closed
-        plt.show(block=True)
+        #plt.show(block=True)
 
         # If we reach this point, the user has closed the window successfully
         self.assertTrue(True, msg="Visualisation closed successfully.")

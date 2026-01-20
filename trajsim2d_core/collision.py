@@ -622,8 +622,8 @@ def gjk_distance(shape_1, shape_2):
     if len(shape_1) == 0 or len(shape_2) == 0:
         return False, float('inf')
     
-    # print("shape_1:", shape_1)
-    # print("shape_2:", shape_2)
+    print("shape_1:", shape_1)
+    print("shape_2:", shape_2)
     
     # Initial direction (from shape1 center to shape2 center)
     direction = np.mean(shape_2, axis=0) - np.mean(shape_1, axis=0)
@@ -634,16 +634,22 @@ def gjk_distance(shape_1, shape_2):
     simplex = [minkowski_support(shape_1, shape_2, direction)]
     direction = -simplex[0]
 
-    while True:
+    # Safeguards
+    max_iterations = 50
+    iteration = 0
+    epsilon = 1e-8  # small threshold to avoid near-zero vectors
+
+    while iteration < max_iterations:
+        iteration += 1
+
         # Add new point in Minkowski difference along direction
         new_point = minkowski_support(shape_1, shape_2, direction)
-        
-        if np.dot(new_point, direction) <= 0:
-            # No collision: compute distance from origin to simplex
+
+        # Check for duplicate points (prevents infinite loops)
+        if np.any([np.allclose(new_point, p, atol=epsilon) for p in simplex]):
             if len(simplex) == 1:
                 distance = np.linalg.norm(simplex[0])
             else:
-                # Project origin onto line segment
                 a = simplex[0]
                 b = simplex[1]
                 ab = b - a
@@ -651,12 +657,37 @@ def gjk_distance(shape_1, shape_2):
                 closest = a + t * ab
                 distance = np.linalg.norm(closest)
             return False, distance
-        
+
+        # Check if the new point does not pass the origin in the direction
+        if np.dot(new_point, direction) <= 0:
+            # No collision: compute distance from origin to simplex
+            if len(simplex) == 1:
+                distance = np.linalg.norm(simplex[0])
+            else:
+                a = simplex[0]
+                b = simplex[1]
+                ab = b - a
+                t = max(0, min(1, -np.dot(a, ab) / np.dot(ab, ab)))
+                closest = a + t * ab
+                distance = np.linalg.norm(closest)
+            return False, distance
+
+        # Append new point to simplex
         simplex.append(new_point)
-        
+
+        # Update simplex and direction
         if update_simplex(simplex, direction):
             # Collision detected
             return True, 0.0
+
+        # Prevent near-zero direction vectors
+        if np.linalg.norm(direction) < epsilon:
+            distance = np.linalg.norm(simplex[-1])
+            return False, distance
+
+    # Safety exit if max iterations reached
+    distance = np.linalg.norm(simplex[-1]) if simplex else 0.0
+    return False, distance
 
 def update_simplex(simplex, direction):
     """
