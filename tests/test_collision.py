@@ -99,9 +99,9 @@ class TestCollisionDetection(unittest.TestCase):
                This test should ONLY display a cropped shape.
         """
 
-        for shape in self.__class__.temp_shapes:
-            self.canvas.remove_shape(shape)
-        self.__class__.temp_shapes = []
+        # for shape in self.__class__.temp_shapes:
+        #     self.canvas.remove_shape(shape)
+        # self.__class__.temp_shapes = []
 
         inflation = 0.1
         canvas = self.canvas 
@@ -181,9 +181,9 @@ class TestCollisionDetection(unittest.TestCase):
                plus collision AABBs if any.
         """
 
-        for shape in self.__class__.temp_shapes:
-            self.canvas.remove_shape(shape)
-        self.__class__.temp_shapes = []
+        # for shape in self.__class__.temp_shapes:
+        #     self.canvas.remove_shape(shape)
+        # self.__class__.temp_shapes = []
 
         inflation = 0.1
 
@@ -241,25 +241,20 @@ class TestCollisionDetection(unittest.TestCase):
 
         print("Continuing execution...")
 
-        shape_list = self.canvas.shapes.copy()
-        for shape in shape_list:
-            self.canvas.remove_shape(shape)
-        self.__class__.temp_shapes = []
-
         self.assertTrue(True, "AABB visualisation completed with no errors.")
 
 
     # =====================================================
     # ===================== GJK TEST ======================
     # =====================================================
-    def test_GJK(self):
+    def test_z_GJK(self):
         """
-        @brief Test GJK collision detection between random objects
+        @brief Test GJK collision detection between set objects
         """
-        shape_list = self.canvas.shapes.copy()
-        for shape in shape_list:
-            self.canvas.remove_shape(shape)
-        self.__class__.temp_shapes = []
+        # shape_list = self.canvas.shapes.copy()
+        # for shape in shape_list:
+        #     self.canvas.remove_shape(shape)
+        # self.__class__.temp_shapes = []
 
         shape = np.array([
             [0.00, 0.00],
@@ -337,7 +332,7 @@ class TestCollisionDetection(unittest.TestCase):
 
 
         for (shape_1, shape_2, distance) in collision_list:
-            if distance < 0.03:
+            if distance == 0.0:
                 self.__class__.temp_shapes.append(self.canvas.add_shape(shape_1, color='red'))
                 self.__class__.temp_shapes.append(self.canvas.add_shape(shape_2, color='red'))
                 continue
@@ -375,13 +370,13 @@ class TestBoundary(unittest.TestCase):
 
         cls.canvas = GeometryCanvas()
 
-
+        cls.inflation = 6.0
 
 
     def test_create_boundary_object(self):
         
 
-        boundary_objects = create_convex_boundary_objects(self.border)
+        boundary_objects = create_convex_boundary_objects(self.border,inflation=self.inflation)
 
         self.canvas.add_shape(boundary_objects, color='black', alpha=0.3)
         #self.canvas.add_shape(boundary_right, color='red', alpha=0.5)
@@ -393,7 +388,7 @@ class TestBoundary(unittest.TestCase):
     def test_boundary_rect_function(self):
         rect = Rectangle((2.0, 1.0), 4.0, 1.5, angle=30.0)
 
-        convex_boundary=create_convex_boundary_objects(self.border)
+        convex_boundary=create_convex_boundary_objects(self.border,inflation=self.inflation)
 
         success = detect_shape_bounded(rect, self.border, convex_boundary=convex_boundary)
 
@@ -401,10 +396,16 @@ class TestBoundary(unittest.TestCase):
         
         self.assertTrue(success, "Shape is within the boundary.")
 
-        rect = Rectangle((13.0, 2.0), 4.0, 1.5, angle=60.0)
+        rect = Rectangle((15.0, 3), 4.0, 1.5, angle=60.0)
 
         success = detect_shape_bounded(rect, self.border, convex_boundary=convex_boundary)
 
+        if not success:
+            for shape_2 in convex_boundary:
+                collision, distance = detect_collision_distance(rect,shape_2,method="GJK")
+                if collision:
+                    self.canvas.add_shape(shape_2, color='red', alpha=0.5)
+        
         self.canvas.add_shape(rect, color='red', alpha=0.5)
 
         self.assertFalse(success, "Shape is within the boundary.")

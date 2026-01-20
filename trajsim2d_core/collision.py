@@ -21,6 +21,7 @@ import numpy as np
 from matplotlib.patches import Polygon, Rectangle, Circle
 from trajsim2d_core.shape_utils import decompose_to_convex_shapes, segment_decreasing_turn
 from trajsim2d_core.utils import normal_angle_at_point
+import time
 
 
 ## Detect Collision
@@ -78,7 +79,16 @@ def detect_collision_distance(shape_1,shape_2,intersecting_area=None,method='GJK
     
     
     if isinstance(shape_1,np.ndarray) and isinstance(shape_2,np.ndarray):
-        return methods[method](shape_1,shape_2)    
+        # start = time.perf_counter()
+        # results = methods[method](shape_1, shape_2)
+        # elapsed_ms = (start - start)  # dummy to avoid NameError if you paste elsewhere
+
+        # elapsed_ms = (time.perf_counter() - start) * 1000.0
+        
+        # print(f"Method {method} took {elapsed_ms:.3f} ms | shape_1 size: {getattr(shape_1, 'shape', None)}, shape_2 size: {getattr(shape_2, 'shape', None)} | distance: {results[1]:.6f}")
+
+        # return results 
+        return methods[method](shape_1, shape_2)
     else:
         raise NotImplementedError("Distance collision detection not implemented for these shape types.")
 
@@ -156,6 +166,7 @@ def create_convex_boundary_objects(boundary,inflation=1.0,AABB = None):
     ## Create a large box to create an object surrounding the boundary
     if AABB is None:
         minx, miny, maxx, maxy = get_AABB(boundary,inflation=inflation)
+        
     else:
         minx, miny, maxx, maxy = AABB
 
@@ -567,7 +578,21 @@ def point_in_polygon(point, polygon):
 #                                                                     #
 #######################################################################
 
-def gjk_distance(shape_1,shape_2):
+def minkowski_support(shape1, shape2, direction):
+    """
+    Compute the support point in the Minkowski Difference along a direction.
+    """
+    p1 = shape1[np.argmax(np.dot(shape1, direction))]
+    p2 = shape2[np.argmin(np.dot(shape2, direction))]
+    return p1 - p2
+
+def triple_product(a, b, c):
+    """
+    Compute the vector triple product: (a x b) x c in 2D
+    """
+    return b * np.dot(c, a) - a * np.dot(c, b)
+
+def gjk_distance(shape_1, shape_2):
     """
     @brief GJK distance algorithm between two np.ndarray shapes
     @param shape_1 is a np.ndarray shape to check for collisions against shape_2
@@ -575,24 +600,79 @@ def gjk_distance(shape_1,shape_2):
     @return bool: if collision is detected
     @return float: distance between shapes
     """
-    smallest_distance = float('inf')
-    vector_polygon = []
+    
+    if len(shape_1) == 0 or len(shape_2) == 0:
+        return False, float('inf')
+    
+    # Initial direction (from shape1 center to shape2 center)
+    direction = np.mean(shape_2, axis=0) - np.mean(shape_1, axis=0)
+    if np.all(direction == 0):
+        direction = np.array([1.0, 0.0])
+    
+    # Initialize simplex with first Minkowski point
+    simplex = [minkowski_support(shape_1, shape_2, direction)]
+    direction = -simplex[0]
 
-    for p1 in shape_1:
-        for p2 in shape_2:
-            vector = p2 - p1
-            dist = np.linalg.norm(vector)
-            if dist < smallest_distance:
-                smallest_distance = dist
-            vector_polygon.append(vector)
-    
-    if point_in_polygon(np.array([0.0,0.0]),np.array(vector_polygon)):
-        return True, 0.0
-    
-    if smallest_distance > 0.03:
-        return False, smallest_distance
-    
-    return False, smallest_distance
+    while True:
+        # Add new point in Minkowski difference along direction
+        new_point = minkowski_support(shape_1, shape_2, direction)
+        
+        if np.dot(new_point, direction) <= 0:
+            # No collision: compute distance from origin to simplex
+            if len(simplex) == 1:
+                distance = np.linalg.norm(simplex[0])
+            else:
+                # Project origin onto line segment
+                a = simplex[0]
+                b = simplex[1]
+                ab = b - a
+                t = max(0, min(1, -np.dot(a, ab) / np.dot(ab, ab)))
+                closest = a + t * ab
+                distance = np.linalg.norm(closest)
+            return False, distance
+        
+        simplex.append(new_point)
+        
+        if update_simplex(simplex, direction):
+            # Collision detected
+            return True, 0.0
+
+def update_simplex(simplex, direction):
+    """
+    Update the simplex and direction.
+    Returns True if origin is inside simplex (collision detected).
+    """
+    if len(simplex) == 2:
+        # Line segment case
+        b = simplex[1]
+        a = simplex[0]
+        ab = b - a
+        ao = -a
+        ab_perp = triple_product(ab, ao, ab)
+        direction[:] = ab_perp
+    else:
+        # Triangle case
+        c = simplex[2]
+        b = simplex[1]
+        a = simplex[0]
+
+        ab = b - a
+        ac = c - a
+        ao = -a
+
+        ab_perp = triple_product(ac, ab, ab)
+        ac_perp = triple_product(ab, ac, ac)
+
+        if np.dot(ab_perp, ao) > 0:
+            simplex.pop(2)  # remove c
+            direction[:] = ab_perp
+        elif np.dot(ac_perp, ao) > 0:
+            simplex.pop(1)  # remove b
+            direction[:] = ac_perp
+        else:
+            # Origin is inside triangle
+            return True
+    return False
 
 
 
