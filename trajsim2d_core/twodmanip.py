@@ -84,7 +84,7 @@ class PlanarManipulator:
         if n is None:
             n = generate_random_int(3,6)
         if base_offset is None:
-            base_offset = generate_random_number(0.0,4.0)
+            base_offset = generate_random_number(self.CLIP_ENDS_DEFAULT*4,0.4)
         if link_width is None:
             link_width = generate_random_number(self.CLIP_ENDS_DEFAULT*2,0.2)
         if link_lengths is None:

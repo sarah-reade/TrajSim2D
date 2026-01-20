@@ -77,11 +77,16 @@ def initialise_visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=Non
             collision = True
             attempts = 0
             convex_border = create_convex_boundary_objects(border) 
-            while collision and attempts < attempt_max:
+            while collision:
+                if attempts == attempt_max:
+                    attempt_max = 1
+                    break 
+                
                 print(f"Attempt {attempts+1} to place arm without collision.")
                 point, angle = generate_random_edge_point(border,objs)
                 base_transform = make_transform_2d(point[0],point[1],angle)
-                [collision, config] = arm.generate_random_config(border,objs,base_transform=base_transform,attempts=1,convex_boundary=convex_border)
+                config = [0] * arm.n
+                collision = arm.in_collision(config, border,objs,base_transform=base_transform,convex_boundary=convex_border)
                 if collision:
                     print("Number of Collisions:", len(arm.collision_list))
                     arm_geometry = arm.make_arm_geometry(config=config,base_tf=base_transform,clip_ends=arm.CLIP_ENDS_DEFAULT)

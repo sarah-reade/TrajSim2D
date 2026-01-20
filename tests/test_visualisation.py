@@ -58,7 +58,7 @@ class TestVisualisation(unittest.TestCase):
         border = generate_random_border(border_size=5, smoothness=0.001)
         
         # Generate a random bumpy objects for testing
-        objs, concave_objs = generate_random_convex_objects(object_size=0.5,num_objs=1,smoothness=0.001)
+        objs, concave_objs = generate_random_convex_objects(object_size=0.5,num_objs=5,smoothness=0.001)
         # Generate a random arm for testing
         arm = PlanarManipulator(n=3)
         arm.print_parameters()
