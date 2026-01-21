@@ -1,6 +1,6 @@
 # TrajSim2D
 TrajSim2D is a 2D testbed for trajectory algorithms of planar robot manipulators with N-DoF revolute joints, running in ROS 2. It generates random obstacle-rich environments, publishes joint states, base wrenches, obstacle point clouds, and costmaps, and supports trajectory testing, collision-free pose sampling, and visualisation.
-
+```
 ═════════════════════════════════════════════════════════════════════════════════════
 ║                                                                                   ║
 ║           _____ _    _ _____  _____  ______ _   _ _______ _      __     __        ║
@@ -25,3 +25,4 @@ TrajSim2D is a 2D testbed for trajectory algorithms of planar robot manipulators
 ║   |_____/|______|   \/   |______|______\____/|_|    |_|  |_|______|_| \_|  |_|    ║
 ║                                                                                   ║
 ═════════════════════════════════════════════════════════════════════════════════════
+```
