@@ -1,6 +1,6 @@
 import unittest
 from trajsim2d_core.twodmanip import PlanarManipulator
-from trajsim2d_core.calculations import calculate_static_torque
+from trajsim2d_core.calculations import calculate_static_torque, calculate_base_wrench_force
 import numpy as np
 
 
@@ -13,8 +13,9 @@ class test_calculate_static_torque(unittest.TestCase):
         link_length = 2.0
         link_mass = 1.5
         g = -9.81
+        base_offset = 0.5
         
-        arm = PlanarManipulator(n=1,base_offset=0.0, link_lengths=[link_length], link_masses=[link_mass])
+        arm = PlanarManipulator(n=1,base_offset=base_offset, link_lengths=[link_length], link_masses=[0.0, link_mass])
         
         q = 0.0
         tau = calculate_static_torque(arm, arm.base_tf, [q])
@@ -52,13 +53,16 @@ class test_calculate_static_torque(unittest.TestCase):
         
         self.assertAlmostEqual(tau[0], -tau_calc, places=5)
         
+        
+        
+        
                 
     def test_two_link(self):
         link_length = [2.0, 1.5]
         link_mass = [1.5, 1.0]
         g = -9.81
         
-        arm = PlanarManipulator(n=2,base_offset=0.0, link_lengths=link_length, link_masses=link_mass)
+        arm = PlanarManipulator(n=2,base_offset=0.0, link_lengths=link_length, link_masses=[0.0] + link_mass)
         
         q = [0.0, 0.0]
         tau = calculate_static_torque(arm, arm.base_tf, q)
@@ -105,7 +109,7 @@ class test_calculate_static_torque(unittest.TestCase):
         
     def test_bad_inputs(self):
         link_length = [2.0, 1.5]
-        link_mass = [1.5, 1.0]
+        link_mass = [0.0,1.5, 1.0]
         g = -9.81
         
         arm = PlanarManipulator(n=2,base_offset=0.0, link_lengths=link_length, link_masses=link_mass)
@@ -124,3 +128,107 @@ class test_calculate_static_torque(unittest.TestCase):
         
         with self.assertRaises(ValueError):
             tau = calculate_static_torque(arm, bad_base_tf, [0.0, 0.0])
+            
+            
+            
+class test_calculate_base_wrench_force(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def test_one_link_static(self):
+        link_length = 2.0
+        link_mass = [0.4,1.5]
+        base_offset = 0.5
+        g = -9.81
+
+        arm = PlanarManipulator(
+            n=1,
+            base_offset=base_offset,
+            link_lengths=[link_length],
+            link_masses=link_mass
+        )
+
+        q = [0.0]
+
+        W = calculate_base_wrench_force(
+            manip=arm,
+            base_tf=arm.base_tf,
+            q=q
+        )
+
+        expected_force_y = link_mass[0] * g + link_mass[1] * g
+        
+        print("Base wrench for one link at 0 radians:", W, ". Expected force Y:", expected_force_y)
+
+        self.assertAlmostEqual(W[0], 0.0, places=5)          # Fx
+        self.assertAlmostEqual(W[1], expected_force_y, places=5)  # Fy
+        self.assertAlmostEqual(W[2], 0.0, places=5)          # Base torque
+        
+        beta = np.pi / 4
+        base_tf = np.array([
+            [np.cos(beta), -np.sin(beta), 0.0],
+            [np.sin(beta),  np.cos(beta), 0.0],
+            [0.0,           0.0,          1.0]
+        ])
+        
+        W = calculate_base_wrench_force(
+            manip=arm,
+            base_tf=base_tf,
+            q=q
+        )
+        
+        # Gravity force expressed in base frame
+        expected_fx = -sum(link_mass) * g * np.sin(-beta)
+        expected_fy =  sum(link_mass) * g * np.cos(-beta)
+
+        # tau of joint_1
+        tau1_calc = link_length * np.sin(-beta) * (link_mass[1] * g)
+        
+        # joint_1 tau effect at base
+        tau1_calc += (base_offset * np.sin(-beta) * (link_mass[0] * g))
+        
+        # tau effect of end effector
+        tau2_calc = (base_offset + link_length) * np.sin(-beta) * link_mass[1] * g
+        
+        expected_tau = tau1_calc + tau2_calc
+        
+        
+        print("Base wrench for one link at 0 radians with base rotated 45 degrees:", W, ". Expected force:", (expected_fx, expected_fy), " Expected torque:", expected_tau)
+        
+        self.assertAlmostEqual(W[0], expected_fx, places=5)   # Fx
+        self.assertAlmostEqual(W[1], expected_fy, places=5)   # Fy
+        self.assertAlmostEqual(W[2], expected_tau, places=5)  # Base torque
+        
+    def test_two_link_static(self):
+        link_length = []
+        link_masses = [0.4, 1.5, 0.2]  # last mass is for the end-effector
+        base_offset = 0.5
+        g = -9.81
+
+        arm = PlanarManipulator(
+            n=2,
+            base_offset=base_offset,
+            link_lengths=[link_length, link_length],
+            link_masses=link_masses
+        )
+
+        q = [0.0, 0.0]
+
+        W = calculate_base_wrench_force(
+            manip=arm,
+            base_tf=arm.base_tf,
+            q=q
+        )
+
+        # Total expected force in Y is sum of all link masses times gravity
+        expected_force_y = sum(link_masses) * g
+
+        print("Base wrench for two links at [0,0] radians:", W, ". Expected force Y:", expected_force_y)
+
+        self.assertAlmostEqual(W[0], 0.0, places=5)           # Fx
+        self.assertAlmostEqual(W[1], expected_force_y, places=5)  # Fy
+        self.assertAlmostEqual(W[2], 0.0, places=5)           # Base torque
+        
+        
+if __name__ == '__main__':
+    unittest.main()

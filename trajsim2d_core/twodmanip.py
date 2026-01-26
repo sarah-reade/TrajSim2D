@@ -83,7 +83,7 @@ class PlanarManipulator:
         """
         if n is None:
             # Collect lengths of all provided (not None) arrays
-            lengths = [len(arr) for arr in [link_lengths, link_masses] 
+            lengths = [len(arr) for arr in [link_lengths, link_masses[:-1]] 
                        if arr is not None]
 
             if not lengths:
@@ -106,7 +106,7 @@ class PlanarManipulator:
         if joint_radius is None:
             joint_radius= generate_random_number(link_width/2,np.min(link_lengths)/2)
         if link_masses is None:
-            link_masses = generate_random_number(0.1, 5.0, n)
+            link_masses = generate_random_number(0.1, 5.0, n+1)
             
 
         # Print all generated values after initialization
