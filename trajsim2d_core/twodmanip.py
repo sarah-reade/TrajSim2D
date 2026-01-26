@@ -41,7 +41,7 @@ class PlanarManipulator:
     """
     
 
-    def __init__(self, base_tf=None, base_offset= None, link_width=None, link_lengths=None, joint_radius=None, n=None):
+    def __init__(self, base_tf=None, base_offset= None, link_width=None, link_lengths=None, joint_radius=None, link_masses=None, n=None):
         """
         @brief Initialize a planar manipulator.
         @param link_width (float or np.ndarray) Width or widths of the manipulator links.
@@ -53,8 +53,8 @@ class PlanarManipulator:
         """
         self.CLIP_ENDS_DEFAULT = 0.01
         
-        if link_width is None or link_lengths is None or joint_radius:
-            self.base_offset,self.link_width,self.link_lengths,self.joint_radius, self.n = self.generate_random_arm(base_offset,link_width,link_lengths,joint_radius, n)
+        if base_offset is None or link_width is None or link_lengths is None or joint_radius is None or n is None or link_masses is None:
+            self.base_offset,self.link_width,self.link_lengths,self.joint_radius, self.link_masses, self.n = self.generate_random_arm(base_offset,link_width,link_lengths,joint_radius, link_masses, n)
 
         ## Calculate Joint Limits
         self.joint_limit = self.calculate_joint_limits(self.link_width,self.joint_radius)
@@ -67,7 +67,7 @@ class PlanarManipulator:
         
 
 
-    def generate_random_arm(self, base_offset=None,link_width=None, link_lengths=None, joint_radius=None, n=None):
+    def generate_random_arm(self, base_offset=None,link_width=None, link_lengths=None, joint_radius=None, link_masses=None, n=None):
         """
         @brief Generate random link width and length arrays for a multi-link arm.
         @details
@@ -82,7 +82,21 @@ class PlanarManipulator:
             - joint_radius: float of random joint radius in range [0.01, 1.0]
         """
         if n is None:
-            n = generate_random_int(3,6)
+            # Collect lengths of all provided (not None) arrays
+            lengths = [len(arr) for arr in [link_lengths, link_masses] 
+                       if arr is not None]
+
+            if not lengths:
+                # No info given → pick random
+                n = generate_random_int(2, 10)
+            else:
+                # Check consistency among provided arrays
+                if len(set(lengths)) > 1:
+                    raise ValueError(
+                        f"Inconsistent lengths among provided manipulator inputs: {lengths}"
+                    )
+                n = lengths[0]
+                
         if base_offset is None:
             base_offset = generate_random_number(self.CLIP_ENDS_DEFAULT*4,0.4)
         if link_width is None:
@@ -90,8 +104,9 @@ class PlanarManipulator:
         if link_lengths is None:
             link_lengths= generate_random_number(link_width,1,n)
         if joint_radius is None:
-            
             joint_radius= generate_random_number(link_width/2,np.min(link_lengths)/2)
+        if link_masses is None:
+            link_masses = generate_random_number(0.1, 5.0, n)
             
 
         # Print all generated values after initialization
@@ -102,7 +117,7 @@ class PlanarManipulator:
         #     f"joint_radius: {joint_radius}"
         # )
 
-        return base_offset, link_width, link_lengths, joint_radius, n
+        return base_offset, link_width, link_lengths, joint_radius, link_masses, n
     
 
     def calculate_joint_limits(self,link_width,joint_radius):
