@@ -1,3 +1,22 @@
+###############################################################################
+## @file test_calculations.py
+## @brief Test Calculations functions for TrajSim2D.
+##
+## This file is part of the TrajSim2D project, a 2D planar manipulator simulator
+## for trajectory planning, collision testing, and environment visualization.
+## 
+## Author: Sarah Reade
+## Email: 28378329@students.lincoln.ac.uk
+## Co-Author: ChatGPT (GPT-5 by OpenAI)
+## Date: 2025-10-23
+## Version: 0.0.1
+##
+## License: MIT
+##
+## Usage:
+## >>> pytest tests/test_calculations.py
+###############################################################################
+
 import unittest
 from trajsim2d_core.twodmanip import PlanarManipulator
 from trajsim2d_core.calculations import calculate_static_torque, calculate_base_wrench_force, evaluate_trajectory, Trajectory
@@ -52,9 +71,6 @@ class test_calculate_static_torque(unittest.TestCase):
         print("Torque for base at  ", np.rad2deg(q), "  degrees:", tau[0], ". Expected:", -tau_calc)
         
         self.assertAlmostEqual(tau[0], -tau_calc, places=5)
-        
-        
-        
         
                 
     def test_two_link(self):

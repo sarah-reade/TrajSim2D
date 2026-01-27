@@ -14,7 +14,7 @@
 ## License: MIT
 ##
 ## Usage:
-## >>> pytest
+## >>> pytest tests/test_twodmanip.py
 ###############################################################################
 
 import unittest
