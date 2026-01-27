@@ -25,6 +25,8 @@
 
 
 # Imports
+import threading
+import time
 from trajsim2d_core.geometry_canvas import GeometryCanvas
 from trajsim2d_core.utils import make_transform_2d, generate_random_number
 from trajsim2d_core.environment import generate_random_edge_point
@@ -61,6 +63,8 @@ def initialise_visualisation(border=None,objs=None,base_transform=None,arm=None,
     if arm is not None:
         arm_ids, base_transform, joint_config_1, joint_config_2 = initialise_visualise_arm(canvas,arm,border,objs,base_transform,joint_config_1,joint_config_2,attempt_max=attempt_max)
         base_id = canvas.add_tf(base_transform)
+    
+    canvas.refresh()
 
     return canvas, base_transform, border_id, object_ids, arm_ids, joint_config_1, joint_config_2
 
@@ -69,6 +73,10 @@ def initialise_visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=Non
     """
     @ brief adds an arm to the canvas
     """
+    
+    if border is None:
+        return [], np.eye(3), None, None
+    
     ## generate the base_transform
     if base_transform is None:
         base_transform = make_transform_2d() 
@@ -126,10 +134,71 @@ def visualise_arm(canvas,arm=PlanarManipulator(),base_transform=None,border=None
 def visualise_object(canvas,obj,color='red', alpha=0.5):
     return canvas.add_shape(obj,color,alpha)
 
+# update trajectory visualisation
+def update_trajectory_visualisation(time,canvas : GeometryCanvas,arm,trajectory,arm_ids,border=None,objs=None):
+    """
+    @brief Update the visualisation to a specific time in the trajectory.
+    @param time Time point to visualise.
+    @param canvas GeometryCanvas object.
+    @param arm PlanarManipulator object.
+    @param trajectory Trajectory object.
+    @param arm_ids List of shape IDs for the arm segments.
+    @param border Nx2 np.ndarray defining the boundary.
+    @param objs List of objects in the environment.
+    
+    @return new_arm_ids Updated list of shape IDs for the arm segments.
+    @return done Boolean indicating if the trajectory has completed.
+    """
+    
+    # Find the index corresponding to the given time
+    index = np.searchsorted(trajectory.time, time)
+    if index >= len(trajectory.time):
+        index = len(trajectory.time) - 1
+        return arm_ids, True
+    
+    # Remove existing arm shapes
+    for id in arm_ids:
+        if id is not None:
+            canvas.remove_shape(id)
+        else:
+            print("Warning: Tried to remove a None shape id.")
+    
+    # Visualise arm at the specified time
+    config = trajectory.q[index,:]
+    
+    [new_arm_ids,_] = visualise_arm(canvas,arm,trajectory.base_tf,joint_config=config,color='black', alpha=0.5,border=border,objs=objs)
+    
+    canvas.refresh()
+    
+    return new_arm_ids, False
+
 
 # Sync visualise trajectory
+def visualise_trajectory_sync(canvas : GeometryCanvas,arm,trajectory,border=None,objs=None):
+    """
+    @brief Visualise a trajectory synchronously.
+    @param canvas GeometryCanvas object.
+    @param arm PlanarManipulator object.
+    @param trajectory Trajectory object.
+    @param border Nx2 np.ndarray defining the boundary.
+    @param objs List of objects in the environment.
+    """
+    
+    # start timer
+    start_time = time.time()
+    
+    arm_ids = []
+    while True:
+        
+        # Update visualisation
+        [arm_ids, done] = update_trajectory_visualisation(time.time() - start_time,canvas,arm,trajectory
+                                                        ,arm_ids,border=border,objs=objs)
+        if done:
+            return arm_ids
+        
+        time.sleep(0.001)
 
-# Async visualise trajectory
+    return arm_ids
 
 # Visualise outputs 
 

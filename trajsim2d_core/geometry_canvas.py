@@ -94,6 +94,12 @@ class GeometryCanvas:
         self.ax.autoscale_view()
         plt.ion()
         plt.show()
+        
+    def refresh(self):
+        """
+        @brief Refresh the canvas to reflect any changes made to shapes.
+        """
+        self._refresh()
 
     def add_shape(self,obj,color='blue',alpha=0.5):
         
@@ -129,7 +135,7 @@ class GeometryCanvas:
         shape_id = str(uuid.uuid4())
         self.ax.add_patch(poly)
         self.shapes[shape_id] = poly
-        self._refresh()
+        
         return shape_id
 
     def add_rectangle(self, obj=None,xy=[0.0,0.0], width=0.0, height=0.0, color='red', alpha=0.5):
@@ -150,7 +156,7 @@ class GeometryCanvas:
             shape_id = str(uuid.uuid4())
             self.ax.add_patch(obj)
             self.shapes[shape_id] = obj
-            self._refresh()
+            
             return shape_id
         
         elif isinstance(xy, np.ndarray) and xy.shape == (3, 3):
@@ -171,7 +177,7 @@ class GeometryCanvas:
             shape_id = str(uuid.uuid4())
             self.ax.add_patch(rect)
             self.shapes[shape_id] = rect
-            self._refresh()
+            
             return shape_id
 
 
@@ -192,7 +198,8 @@ class GeometryCanvas:
             shape_id = str(uuid.uuid4())
             self.ax.add_patch(obj)
             self.shapes[shape_id] = obj
-            self._refresh()
+            
+            return shape_id
 
         elif isinstance(center, np.ndarray) and center.shape == (3, 3):
             # Only translation matters for a circle
@@ -202,7 +209,7 @@ class GeometryCanvas:
             shape_id = str(uuid.uuid4())
             self.ax.add_patch(circ)
             self.shapes[shape_id] = circ
-            self._refresh()
+            
             return shape_id
 
     def add_array(self, arr, color='cyan', alpha=0.5, closed=True):
@@ -225,7 +232,7 @@ class GeometryCanvas:
         shape_id = str(uuid.uuid4())
         self.ax.add_patch(poly)
         self.shapes[shape_id] = poly
-        self._refresh()
+        
         return shape_id
 
     def move_shape(self, shape_id, dx, dy):
@@ -246,7 +253,7 @@ class GeometryCanvas:
             shape.set_xy((shape.get_x() + dx, shape.get_y() + dy))
         elif isinstance(shape, Circle):
             shape.center = (shape.center[0] + dx, shape.center[1] + dy)
-        self._refresh()
+        
 
     def update_color(self, shape_id, color):
         """
@@ -258,7 +265,7 @@ class GeometryCanvas:
         shape = self.shapes.get(shape_id)
         if hasattr(shape, "set_color"):
             shape.set_color(color)
-            self._refresh()
+            
 
     def remove_shape(self, shape_id):
         """
@@ -269,7 +276,7 @@ class GeometryCanvas:
         shape = self.shapes.pop(shape_id, None)
         if shape is not None and hasattr(shape, "remove"):
             shape.remove()
-        self._refresh()
+        
 
 
     def _refresh(self):
@@ -391,5 +398,5 @@ class GeometryCanvas:
         }
 
         # Refresh canvas
-        self._refresh()
+        
         return tf_id

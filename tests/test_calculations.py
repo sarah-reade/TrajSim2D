@@ -17,6 +17,7 @@
 ## >>> pytest tests/test_calculations.py
 ###############################################################################
 
+import time
 import unittest
 from trajsim2d_core.twodmanip import PlanarManipulator
 from trajsim2d_core.calculations import calculate_static_torque, calculate_base_wrench_force, evaluate_trajectory, Trajectory
@@ -347,8 +348,11 @@ class TestTrajectoryEvaluation(unittest.TestCase):
 
     def test_evaluate_trajectory_static(self):
         # Evaluate trajectory
+        start_time = time.time()
         evaluate_trajectory(self.traj, self.manip)
-
+        end_time = time.time()
+        print(f"Trajectory evaluation took {end_time - start_time:.6f} seconds.")
+        
         # Check shapes
         N, n = self.q.shape
         self.assertEqual(self.traj.qdot.shape, (N-1, n))
