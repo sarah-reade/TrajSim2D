@@ -86,7 +86,15 @@ def evaluate_path(path: Path, manip: PlanarManipulator):
 
 # calculate outputs based on trajectory
 def evaluate_trajectory(traj: Trajectory, manip: PlanarManipulator, obj=None):
-    ## for all timepoints
+    """
+    ## @brief Evaluates the trajectory to compute velocities, accelerations, torques, base wrench forces, and collision status.
+    ## 
+    ## This function computes the joint velocities, accelerations, torques, base wrench forces, and collision status
+    ## for each time point in the given trajectory of a planar manipulator.
+    ## 
+    ## @param traj Trajectory: The trajectory to evaluate.
+    ## @param manip PlanarManipulator: The manipulator for which the trajectory is defined. 
+    """
 
     # calculate dt
     dt = calc_array_diff_array(traj.time)
@@ -101,6 +109,7 @@ def evaluate_trajectory(traj: Trajectory, manip: PlanarManipulator, obj=None):
     dqdt = get_array_midpoints(dt)
     traj.qdotdot = dqdot / dqdt[:, np.newaxis]
     
+    ## for all timepoints
     for i in range(len(traj.time)):
         
         # calculate torque # static for now
@@ -113,8 +122,6 @@ def evaluate_trajectory(traj: Trajectory, manip: PlanarManipulator, obj=None):
         traj.in_collision[i] = manip.in_collision(traj.q[i], objs=obj,base_transform=traj.base_tf)
          
     return 
-
-# 
 
 
 # calculate torque
