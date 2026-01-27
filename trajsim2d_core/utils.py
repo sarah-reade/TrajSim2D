@@ -75,6 +75,26 @@ def calc_array_diff(array):
     # Return same type as input
     return diff.tolist() if isinstance(array, list) else diff
 
+
+def calc_array_diff_array(array):
+    """
+    @brief Calculate differences between consecutive elements in an array or list.
+    @param array List or NumPy array of floats.
+    @return List or NumPy array of float differences, matching the input type.
+    """
+    data = np.array(array, dtype=float)  # ensure it's a NumPy array of floats
+    
+    if data.ndim == 1:
+        # 1D array
+        diff = np.diff(data)  # shape (N-1,)
+    elif data.ndim == 2:
+        # 2D array: differences along axis 0 (time)
+        diff = np.diff(data, axis=0)  # shape (N-1, n)
+    else:
+        raise ValueError(f"Unsupported array shape {data.shape}, must be 1D or 2D")
+    
+    return diff
+
 def get_array_midpoints(array):
     """
     @brief Calculate midpoints between consecutive elements in a 1D array or list.

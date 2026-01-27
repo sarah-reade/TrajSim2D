@@ -154,6 +154,7 @@ class PlanarManipulator:
 
     def in_collision(self,config,border= None,objs = [],base_transform=None,convex_boundary=None):
         
+        
         ## make geometry
         arm_geometry=self.make_arm_geometry(config,base_tf=base_transform,clip_ends=self.CLIP_ENDS_DEFAULT)
         

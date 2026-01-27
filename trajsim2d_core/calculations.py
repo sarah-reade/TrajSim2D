@@ -24,7 +24,7 @@
 ###############################################################################
 
 # Imports
-from trajsim2d_core.utils import calc_array_diff, get_array_midpoints
+from trajsim2d_core.utils import calc_array_diff_array, get_array_midpoints
 from trajsim2d_core.twodmanip import PlanarManipulator
 import numpy as np
 
@@ -63,11 +63,13 @@ class Trajectory:
     ## @param qdotdot np.ndarray: Joint accelerations at each time point.
     ## @param tau np.ndarray: Joint torques at each time point.
     ## @param base_wrench np.ndarray: Base wrench forces at each time point.
+    ## @param base_tf np.ndarray: Base transformation matrix.
     ## @param in_collision np.ndarray: Collision status at each time point.
     """
     def __init__(self, time, q, base_tf, attachment_end):
         self.time = time                  # np.ndarray of shape (N,)
         self.q = q                        # np.ndarray of shape (N, n)
+        self.base_tf = base_tf            # np.ndarray of shape (3, 3)
         
         N, n = self.q.shape
 
@@ -87,14 +89,15 @@ def evaluate_trajectory(traj: Trajectory, manip: PlanarManipulator, obj=None):
     ## for all timepoints
 
     # calculate dt
-    dt = calc_array_diff(traj.time)
+    dt = calc_array_diff_array(traj.time)
     
     # calculate qdot
-    dq = calc_array_diff(traj.q)
+    dq = calc_array_diff_array(traj.q)
+    print(f"dq: {dq} | dt: {dt} | traj.q: {traj.q}")
     traj.qdot = dq / dt[:, np.newaxis]
 
     # calculate qdotdot
-    dqdot = calc_array_diff(traj.qdot)
+    dqdot = calc_array_diff_array(traj.qdot)
     dqdt = get_array_midpoints(dt)
     traj.qdotdot = dqdot / dqdt[:, np.newaxis]
     

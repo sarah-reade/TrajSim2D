@@ -1,6 +1,6 @@
 import unittest
 from trajsim2d_core.twodmanip import PlanarManipulator
-from trajsim2d_core.calculations import calculate_static_torque, calculate_base_wrench_force
+from trajsim2d_core.calculations import calculate_static_torque, calculate_base_wrench_force, evaluate_trajectory, Trajectory
 import numpy as np
 
 
@@ -298,6 +298,60 @@ class test_calculate_base_wrench_force(unittest.TestCase):
         self.assertAlmostEqual(W[1], expected_fy, places=5)   # Fy
         self.assertAlmostEqual(W[2], expected_tau, places=5)  # Base torque
         
+        
+class TestTrajectoryEvaluation(unittest.TestCase):
+    def setUp(self):
+        # Simple 1-link manipulator
+        self.link_length = [2.0]
+        self.link_mass = [0.4, 1.5]  # last is EE
+        self.base_offset = 0.5
+        self.g = -9.81
+
+        # Create a simple PlanarManipulator
+        self.manip = PlanarManipulator(
+            n=1,
+            base_offset=self.base_offset,
+            link_lengths=self.link_length,
+            link_masses=self.link_mass
+        )
+
+        # Simple trajectory: 3 time points
+        self.time = np.array([0.0, 0.1, 0.2])
+        self.q = np.zeros((3, 1))  # joint at 0 radians
+        self.base_tf = np.eye(3)
+        self.attachment_end = None
+
+        # Trajectory object
+        self.traj = Trajectory(
+            time=self.time,
+            q=self.q,
+            base_tf=self.base_tf,
+            attachment_end=self.attachment_end
+        )
+
+    def test_evaluate_trajectory_static(self):
+        # Evaluate trajectory
+        evaluate_trajectory(self.traj, self.manip)
+
+        # Check shapes
+        N, n = self.q.shape
+        self.assertEqual(self.traj.qdot.shape, (N-1, n))
+        self.assertEqual(self.traj.qdotdot.shape, (N-2, n))
+        self.assertEqual(self.traj.tau.shape, (N, n))
+        self.assertEqual(self.traj.base_wrench.shape, (N, 3))
+        self.assertEqual(self.traj.in_collision.shape, (N,))
+
+        # Check static torque / base wrench at q=0
+        expected_force_y = sum(self.link_mass) * self.g
+        for i in range(N):
+            # Base wrench Y component
+            self.assertAlmostEqual(self.traj.base_wrench[i][1], expected_force_y, places=5)
+            # Torque
+            expected_tau = self.link_length[0] * self.link_mass[1] * self.g + \
+                           self.base_offset * self.link_mass[0] * self.g
+            self.assertAlmostEqual(self.traj.tau[i][0], expected_tau, places=5)
+            # Not in collision
+            self.assertFalse(self.traj.in_collision[i])
         
 if __name__ == '__main__':
     unittest.main()

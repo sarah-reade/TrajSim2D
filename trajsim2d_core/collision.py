@@ -149,9 +149,9 @@ def detect_shape_bounded(shape,boundary,method='GJK',inflation=1.0,AABB = None,c
         collision, distance = detect_collision_distance(shape,shape_2,method=method)
         
         if collision:
-            print("Shape out of bounds:",collision, " | Distance:",distance)
-            print("Shape:", shape)
-            print("Boundary segment:", shape_2)
+            # print("Shape out of bounds:",collision, " | Distance:",distance)
+            # print("Shape:", shape)
+            # print("Boundary segment:", shape_2)
             return False
 
     return True
@@ -274,7 +274,7 @@ def detect_any_collisions(shapes_1,shapes_2,max_distance=0.2,method='GJK'):
     any_collisions_flag, pot_collision_shapes = detect_any_collisions_AABB(shapes_1,shapes_2,inflation=max_distance)
 
     if not any_collisions_flag:
-        print("No potential collisions detected using AABB.")
+        #print("No potential collisions detected using AABB.")
         return False,[]
     
     # For all potentially intersecting shapes check for more in detail collisions:
@@ -298,7 +298,7 @@ def detect_any_collisions_AABB(shapes_1,shapes_2,inflation=0.1):
     potential_collisions = []
 
     for i, shape_1 in enumerate(shapes_1):
-        for shape_2 in shapes_1[i+1:]+shapes_2:
+        for shape_2 in ((shapes_1[i+1:]+shapes_2) if shapes_2 is not None else shapes_1[i+1:]):
             if shape_1 is shape_2:
                 continue
 
@@ -332,13 +332,13 @@ def detect_any_collisions_distance(shapes,method='GJK'):
             collision_list.append((shape_1,shape_2,distance))
             
     elapsed_ms = (time.perf_counter() - start) * 1000.0
-    print(
-        f"detect_any_collisions_distance took {elapsed_ms:.3f} ms | "
-        f"number of shape pairs: {len(shapes)} | "
-        f"Largest shape sizes: "
-        f"{max([get_shape_size(s[0]) for s in shapes])}, "
-        f"{max([get_shape_size(s[1]) for s in shapes])}"
-    )
+    # print(
+    #     f"detect_any_collisions_distance took {elapsed_ms:.3f} ms | "
+    #     f"number of shape pairs: {len(shapes)} | "
+    #     f"Largest shape sizes: "
+    #     f"{max([get_shape_size(s[0]) for s in shapes])}, "
+    #     f"{max([get_shape_size(s[1]) for s in shapes])}"
+    # )
     
     return collision_flag, collision_list
 
@@ -352,10 +352,10 @@ def detect_any_collisions_bounded(boundary,shapes_1,shapes_2,convex_boundary=Non
     @return bool: if collision is detected or shapes_1 out of bounds
     """
     
-    if convex_boundary is None:
+    if convex_boundary is None and boundary is not None:
         convex_boundary = create_convex_boundary_objects(boundary)
     
-    shapes_2 = shapes_2 + convex_boundary
+    shapes_2 = (shapes_2 + convex_boundary) if convex_boundary is not None else shapes_2
 
     return detect_any_collisions(shapes_1,shapes_2) 
 
@@ -622,8 +622,8 @@ def gjk_distance(shape_1, shape_2):
     if len(shape_1) == 0 or len(shape_2) == 0:
         return False, float('inf')
     
-    print("shape_1:", shape_1)
-    print("shape_2:", shape_2)
+    # print("shape_1:", shape_1)
+    # print("shape_2:", shape_2)
     
     # Initial direction (from shape1 center to shape2 center)
     direction = np.mean(shape_2, axis=0) - np.mean(shape_1, axis=0)
