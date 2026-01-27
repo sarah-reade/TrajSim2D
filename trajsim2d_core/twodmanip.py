@@ -83,7 +83,8 @@ class PlanarManipulator:
         """
         if n is None:
             # Collect lengths of all provided (not None) arrays
-            lengths = [len(arr) for arr in [link_lengths, link_masses[:-1]] 
+            
+            lengths = [len(arr) for arr in [link_lengths, link_masses[:-1] if link_masses is not None else None] 
                        if arr is not None]
 
             if not lengths:
@@ -184,6 +185,7 @@ class PlanarManipulator:
         """
 
         tfs = []
+        config = [-x for x in config]  # Invert angles for correct direction
 
         # Base offset (e.g., vertical offset from ground)
         temp_tf = np.eye(3)
@@ -199,8 +201,8 @@ class PlanarManipulator:
 
             # Local transform for this joint
             rot_tf = np.array([
-                [c_i,  s_i, 0],
-                [-s_i,  c_i, 0],
+                [c_i,  -s_i, 0],
+                [s_i,  c_i, 0],
                 [0,    0,   1]
             ])
             trans_tf = np.array([

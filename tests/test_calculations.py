@@ -11,33 +11,33 @@ class test_calculate_static_torque(unittest.TestCase):
     def test_one_link(self):
         
         link_length = 2.0
-        link_mass = 1.5
+        link_masses = 1.5
         g = -9.81
         base_offset = 0.5
         
-        arm = PlanarManipulator(n=1,base_offset=base_offset, link_lengths=[link_length], link_masses=[0.0, link_mass])
+        arm = PlanarManipulator(n=1,base_offset=base_offset, link_lengths=[link_length], link_masses=[0.0, link_masses])
         
         q = 0.0
         tau = calculate_static_torque(arm, arm.base_tf, [q])
         
-        print("Torque for one link at 0 radians:", tau[0])
+        print("Torque for one link at  ", np.rad2deg(q), "  radians:", tau[0])
         
         self.assertAlmostEqual(tau[0], 0.0, places=5)
         
         q = np.pi / 2
         tau = calculate_static_torque(arm, arm.base_tf, [q])
-        tau_calc = link_length * (link_mass * g)
+        tau_calc = link_length * (link_masses * g)
         
-        print("Torque for one link at 90 degrees:", tau[0], ". Expected:", tau_calc)
+        print("Torque for one link at  ", np.rad2deg(q), "  degrees:", tau[0], ". Expected:", tau_calc)
         
         self.assertAlmostEqual(tau[0], tau_calc, places=5)
         
         
         q = np.pi / 4
         tau = calculate_static_torque(arm, arm.base_tf, [q])
-        tau_calc = link_length * np.sin(q) * (link_mass * g)
+        tau_calc = link_length * np.sin(q) * (link_masses * g)
         
-        print("Torque for one link at 45 degrees:", tau[0], ". Expected:", tau_calc)
+        print("Torque for one link at  ", np.rad2deg(q), "  degrees:", tau[0], ". Expected:", tau_calc)
         
         self.assertAlmostEqual(tau[0], tau_calc, places=5)
         
@@ -49,7 +49,7 @@ class test_calculate_static_torque(unittest.TestCase):
         q = 0.0
         tau = calculate_static_torque(arm, base_tf, [q])
         
-        print("Torque for base at 45 degrees:", tau[0], ". Expected:", -tau_calc)
+        print("Torque for base at  ", np.rad2deg(q), "  degrees:", tau[0], ". Expected:", -tau_calc)
         
         self.assertAlmostEqual(tau[0], -tau_calc, places=5)
         
@@ -59,10 +59,11 @@ class test_calculate_static_torque(unittest.TestCase):
                 
     def test_two_link(self):
         link_length = [2.0, 1.5]
-        link_mass = [1.5, 1.0]
+        link_masses = [1.5, 1.0]
+        base_offset = 0.5
         g = -9.81
         
-        arm = PlanarManipulator(n=2,base_offset=0.0, link_lengths=link_length, link_masses=[0.0] + link_mass)
+        arm = PlanarManipulator(n=2,base_offset=base_offset, link_lengths=link_length, link_masses=[0.0] + link_masses)
         
         q = [0.0, 0.0]
         tau = calculate_static_torque(arm, arm.base_tf, q)
@@ -75,10 +76,10 @@ class test_calculate_static_torque(unittest.TestCase):
         q = [np.pi / 4, 0.0]
         tau = calculate_static_torque(arm, arm.base_tf, q)
         
-        tau1_calc = (link_length[1] + link_length[0]) * np.sin(q[0]) * (link_mass[1] * g) + link_length[0] * np.sin(q[0]) * (link_mass[0] * g)
-        tau2_calc = link_length[1] * np.sin(q[0]) * (link_mass[1] * g)
+        tau1_calc = (link_length[1] + link_length[0]) * np.sin(q[0]) * (link_masses[1] * g) + link_length[0] * np.sin(q[0]) * (link_masses[0] * g)
+        tau2_calc = link_length[1] * np.sin(q[0]) * (link_masses[1] * g)
         
-        print("Torque for two links at [45,0] degrees:", tau, ". Expected:", [tau1_calc, tau2_calc])
+        print("Torque for two links at  ", np.rad2deg(q), "  degrees:", tau, ". Expected:", [tau1_calc, tau2_calc])
         
         self.assertAlmostEqual(tau[0], tau1_calc, places=5)
         self.assertAlmostEqual(tau[1], tau2_calc, places=5)
@@ -91,7 +92,7 @@ class test_calculate_static_torque(unittest.TestCase):
                             [0.0,  0.0, 1.0]])
         tau = calculate_static_torque(arm, base_tf, q)
         
-        print("Torque for base at 45 degrees, links at 0 radians:", tau, ". Expected:", [-tau1_calc, -tau2_calc])
+        print("Torque for base at  ", np.rad2deg(q), "  degrees, links at 0 radians:", tau, ". Expected:", [-tau1_calc, -tau2_calc])
         
         self.assertAlmostEqual(tau[0], -tau1_calc, places=5)
         self.assertAlmostEqual(tau[1], -tau2_calc, places=5)
@@ -99,20 +100,20 @@ class test_calculate_static_torque(unittest.TestCase):
         q = [np.pi / 4, np.pi/4]
         tau = calculate_static_torque(arm, arm.base_tf, q)
         
-        tau1_calc = (link_length[0] * np.sin(q[0]) + link_length[1] * np.sin(q[0] + q[1])) * (link_mass[1] * g) + link_length[0] * np.sin(q[0]) * (link_mass[0] * g)
-        tau2_calc = link_length[1] * np.sin(q[0] + q[1]) * (link_mass[1] * g)
+        tau1_calc = (link_length[0] * np.sin(q[0]) + link_length[1] * np.sin(q[0] + q[1])) * (link_masses[1] * g) + link_length[0] * np.sin(q[0]) * (link_masses[0] * g)
+        tau2_calc = link_length[1] * np.sin(q[0] + q[1]) * (link_masses[1] * g)
         
-        print("Torque for two links at [45,45] degrees:", tau, ". Expected:", [tau1_calc, tau2_calc])
+        print("Torque for two links at ", np.rad2deg(q), " degrees:", tau, ". Expected:", [tau1_calc, tau2_calc])
         
         self.assertAlmostEqual(tau[0], tau1_calc, places=5)
         self.assertAlmostEqual(tau[1], tau2_calc, places=5)
         
     def test_bad_inputs(self):
         link_length = [2.0, 1.5]
-        link_mass = [0.0,1.5, 1.0]
+        link_masses = [0.0,1.5, 1.0]
         g = -9.81
         
-        arm = PlanarManipulator(n=2,base_offset=0.0, link_lengths=link_length, link_masses=link_mass)
+        arm = PlanarManipulator(n=2,base_offset=0.0, link_lengths=link_length, link_masses=link_masses)
         
         q = [0.0]
         
@@ -137,7 +138,7 @@ class test_calculate_base_wrench_force(unittest.TestCase):
 
     def test_one_link_static(self):
         link_length = 2.0
-        link_mass = [0.4,1.5]
+        link_masses = [0.4,1.5]
         base_offset = 0.5
         g = -9.81
 
@@ -145,7 +146,7 @@ class test_calculate_base_wrench_force(unittest.TestCase):
             n=1,
             base_offset=base_offset,
             link_lengths=[link_length],
-            link_masses=link_mass
+            link_masses=link_masses
         )
 
         q = [0.0]
@@ -156,9 +157,9 @@ class test_calculate_base_wrench_force(unittest.TestCase):
             q=q
         )
 
-        expected_force_y = link_mass[0] * g + link_mass[1] * g
+        expected_force_y = link_masses[0] * g + link_masses[1] * g
         
-        print("Base wrench for one link at 0 radians:", W, ". Expected force Y:", expected_force_y)
+        print("Base wrench for one link at ", q, " radians:", W, ". Expected force Y:", expected_force_y)
 
         self.assertAlmostEqual(W[0], 0.0, places=5)          # Fx
         self.assertAlmostEqual(W[1], expected_force_y, places=5)  # Fy
@@ -178,29 +179,29 @@ class test_calculate_base_wrench_force(unittest.TestCase):
         )
         
         # Gravity force expressed in base frame
-        expected_fx = -sum(link_mass) * g * np.sin(-beta)
-        expected_fy =  sum(link_mass) * g * np.cos(-beta)
+        expected_fx = -sum(link_masses) * g * np.sin(-beta)
+        expected_fy =  sum(link_masses) * g * np.cos(-beta)
 
         # tau of joint_1
-        tau1_calc = link_length * np.sin(-beta) * (link_mass[1] * g)
+        tau1_calc = link_length * np.sin(-beta) * (link_masses[1] * g)
         
         # joint_1 tau effect at base
-        tau1_calc += (base_offset * np.sin(-beta) * (link_mass[0] * g))
+        tau1_calc += (base_offset * np.sin(-beta) * (link_masses[0] * g))
         
         # tau effect of end effector
-        tau2_calc = (base_offset + link_length) * np.sin(-beta) * link_mass[1] * g
+        tau2_calc = (base_offset + link_length) * np.sin(-beta) * link_masses[1] * g
         
         expected_tau = tau1_calc + tau2_calc
         
         
-        print("Base wrench for one link at 0 radians with base rotated 45 degrees:", W, ". Expected force:", (expected_fx, expected_fy), " Expected torque:", expected_tau)
+        print("Base wrench for one link at ", q, " radians with base rotated 45 degrees:", W, ". Expected force:", (expected_fx, expected_fy), " Expected torque:", expected_tau)
         
         self.assertAlmostEqual(W[0], expected_fx, places=5)   # Fx
         self.assertAlmostEqual(W[1], expected_fy, places=5)   # Fy
         self.assertAlmostEqual(W[2], expected_tau, places=5)  # Base torque
         
     def test_two_link_static(self):
-        link_length = []
+        link_length = [2.0, 1.5]
         link_masses = [0.4, 1.5, 0.2]  # last mass is for the end-effector
         base_offset = 0.5
         g = -9.81
@@ -208,7 +209,7 @@ class test_calculate_base_wrench_force(unittest.TestCase):
         arm = PlanarManipulator(
             n=2,
             base_offset=base_offset,
-            link_lengths=[link_length, link_length],
+            link_lengths=link_length,
             link_masses=link_masses
         )
 
@@ -223,11 +224,79 @@ class test_calculate_base_wrench_force(unittest.TestCase):
         # Total expected force in Y is sum of all link masses times gravity
         expected_force_y = sum(link_masses) * g
 
-        print("Base wrench for two links at [0,0] radians:", W, ". Expected force Y:", expected_force_y)
+        print("Base wrench for two links at ", q, " radians:", W, ". Expected force Y:", expected_force_y)
 
         self.assertAlmostEqual(W[0], 0.0, places=5)           # Fx
         self.assertAlmostEqual(W[1], expected_force_y, places=5)  # Fy
         self.assertAlmostEqual(W[2], 0.0, places=5)           # Base torque
+        
+        
+        q = [0.1, -0.1]
+        beta = np.pi / 4
+        
+        base_tf = np.array([
+            [np.cos(beta), -np.sin(beta), 0.0],
+            [np.sin(beta),  np.cos(beta), 0.0],
+            [0.0,           0.0,          1.0]
+        ])
+        
+        W = calculate_base_wrench_force(
+            manip=arm,
+            base_tf=base_tf,
+            q=q
+        )
+        
+        # Gravity force expressed in base frame
+        expected_fx = -sum(link_masses) * g * np.sin(-beta)
+        expected_fy =  sum(link_masses) * g * np.cos(-beta)
+        
+        # calculate joint torque for joint 1
+        tau1_calc = (
+            (
+                link_length[0] * np.sin(-beta + q[0]) +
+                link_length[1] * np.sin(-beta + q[0] + q[1])
+            ) * (link_masses[2] * g)
+            +
+            link_length[0] * np.sin(-beta + q[0]) * (link_masses[1] * g)
+        )
+
+        # joint 1 tau effect at base
+        tau1_calc += (
+            base_offset * np.sin(-beta) * (link_masses[0] * g)
+        )
+              
+        # calculate joint torque for joint 2
+        tau2_calc = (
+            link_length[1]
+            * np.sin(-beta + q[0] + q[1])
+            * (link_masses[2] * g)
+        )
+
+        # joint 2 tau effect at base
+        tau2_calc += (
+            (
+                base_offset * np.sin(-beta) +
+                link_length[0] * np.sin(-beta + q[0])
+            ) * (link_masses[1] * g)
+        )
+        
+        
+        # tau effect of end effector
+        tau3_calc = (
+            (
+                base_offset * np.sin(-beta) +
+                link_length[0] * np.sin(-beta + q[0]) +
+                link_length[1] * np.sin(-beta + q[0] + q[1])
+            ) * (link_masses[2] * g)
+        )
+        
+        expected_tau = tau1_calc + tau2_calc + tau3_calc
+        
+        print("Base wrench for two links at ", q, " radians with base rotated 45 degrees:", W, ". Expected force:", (expected_fx, expected_fy), " Expected torque:", expected_tau)
+        
+        self.assertAlmostEqual(W[0], expected_fx, places=5)   # Fx
+        self.assertAlmostEqual(W[1], expected_fy, places=5)   # Fy
+        self.assertAlmostEqual(W[2], expected_tau, places=5)  # Base torque
         
         
 if __name__ == '__main__':

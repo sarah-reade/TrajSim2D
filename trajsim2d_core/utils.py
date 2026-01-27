@@ -75,6 +75,16 @@ def calc_array_diff(array):
     # Return same type as input
     return diff.tolist() if isinstance(array, list) else diff
 
+def get_array_midpoints(array):
+    """
+    @brief Calculate midpoints between consecutive elements in a 1D array or list.
+    @param array List or NumPy array of floats.
+    @return List or NumPy array of float midpoints, matching the input type.
+    """
+    data = np.array(array, dtype=float)  # ensure it's a NumPy array of floats
+    midpoints = (data[:-1] + data[1:]) / 2.0
+    # Return same type as input
+    return midpoints.tolist() if isinstance(array, list) else midpoints
 
 def get_random_element(array):
     """

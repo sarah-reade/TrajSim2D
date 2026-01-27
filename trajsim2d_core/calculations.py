@@ -24,25 +24,91 @@
 ###############################################################################
 
 # Imports
-from trajsim2d_core.utils import calc_array_diff
+from trajsim2d_core.utils import calc_array_diff, get_array_midpoints
 from trajsim2d_core.twodmanip import PlanarManipulator
 import numpy as np
 
+class Path:
+    """
+    ## @brief Data structure to hold path information
+    ##
+    ## This class encapsulates the path data for a manipulator, including
+    ## joint positions and base transformation matrices at discrete waypoints.
+    ##
+    ## @param trajectories List[Trajectory]: List of Trajectory objects.
+    ## @param base_tfs np.ndarray: Base transformation matrices at each time point.
+    ## @param attachment_end bool: Whether the end effector is attached to the base.
+    """
+    def __init__(self, trajectories, base_tfs, attachment_end):
+        self.trajectories = []                  # list of N trajectories
+        for trajectory in trajectories:  
+            self.trajectories.append(trajectory)
+            
+        self.base_tfs = base_tfs                # np.ndarray of shape (N, 3, 3)
+        self.attachment_end = attachment_end    # np.ndarray of shape (N,)
+    
+
+
+class Trajectory:
+    """
+    ## @brief Data structure to hold trajectory information
+    ##
+    ## This class encapsulates the trajectory data for a manipulator, including
+    ## joint positions, velocities, accelerations, torques, and base wrench forces
+    ## at discrete time points.
+    ##
+    ## @param time np.ndarray: Array of time points.
+    ## @param q np.ndarray: Joint positions at each time point.
+    ## @param qdot np.ndarray: Joint velocities at each time point.
+    ## @param qdotdot np.ndarray: Joint accelerations at each time point.
+    ## @param tau np.ndarray: Joint torques at each time point.
+    ## @param base_wrench np.ndarray: Base wrench forces at each time point.
+    ## @param in_collision np.ndarray: Collision status at each time point.
+    """
+    def __init__(self, time, q, base_tf, attachment_end):
+        self.time = time                  # np.ndarray of shape (N,)
+        self.q = q                        # np.ndarray of shape (N, n)
+        
+        N, n = self.q.shape
+
+        # Initialize dependent quantities as arrays of the correct shape
+        self.qdot = np.zeros((N-1, n), dtype=np.float64)      # shape (N-1, n)
+        self.qdotdot = np.zeros((N-2, n), dtype=np.float64)   # shape (N-2, n)
+        self.tau = np.zeros((N, n), dtype=np.float64)         # shape (N, n)
+        self.base_wrench = np.zeros((N, 3), dtype=np.float64) # shape (N, 3)
+        self.in_collision = np.zeros((N,), dtype=bool)  # shape (N,)
+        
+def evaluate_path(path: Path, manip: PlanarManipulator):
+    pass
+
+
 # calculate outputs based on trajectory
-def evaluate_trajectory(traj):
+def evaluate_trajectory(traj: Trajectory, manip: PlanarManipulator, obj=None):
     ## for all timepoints
 
     # calculate dt
     dt = calc_array_diff(traj.time)
-
+    
     # calculate qdot
+    dq = calc_array_diff(traj.q)
+    traj.qdot = dq / dt[:, np.newaxis]
 
     # calculate qdotdot
+    dqdot = calc_array_diff(traj.qdot)
+    dqdt = get_array_midpoints(dt)
+    traj.qdotdot = dqdot / dqdt[:, np.newaxis]
+    
+    for i in range(len(traj.time)):
+        
+        # calculate torque # static for now
+        traj.tau[i] = calculate_torque(manip, traj.base_tf, traj.q[i])
 
-    # calculate torque
-
-    # calculate base wrench force
-
+        # calculate base wrench force
+        traj.base_wrench[i] = calculate_base_wrench_force(manip=manip, base_tf=traj.base_tf, q=traj.q[i], tau=traj.tau[i])
+    
+        # check if in collision
+        traj.in_collision[i] = manip.in_collision(traj.q[i], objs=obj,base_transform=traj.base_tf)
+         
     return 
 
 # 
@@ -118,6 +184,10 @@ def calculate_static_torque(manip: PlanarManipulator, base_tf, q):
 
 def calculate_torque_effect(m_j, pos_i, pos_j, g= -9.81):
     
+    F = np.array([0.0, m_j * g])     # gravity force
+    r = pos_j - pos_i               # moment arm
+    return r[0]*F[1] - r[1]*F[0]     # 2D cross product
+
     G = np.array([0, m_j * g]) 
     V = pos_j - pos_i
     
@@ -192,6 +262,7 @@ def calculate_base_wrench_force(manip: PlanarManipulator, base_tf, q, qdot=None,
         W[0] += f_i[0]
         W[1] += f_i[1]
         W[2] += base_tau
+        
     
         
     return W
