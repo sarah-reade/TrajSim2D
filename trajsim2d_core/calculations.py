@@ -24,6 +24,8 @@
 ###############################################################################
 
 # Imports
+import threading
+import time
 from trajsim2d_core.utils import calc_array_diff_array, get_array_midpoints
 from trajsim2d_core.twodmanip import PlanarManipulator
 import numpy as np
@@ -84,6 +86,7 @@ def evaluate_path(path: Path, manip: PlanarManipulator):
     pass
 
 
+
 # calculate outputs based on trajectory
 def evaluate_trajectory(traj: Trajectory, manip: PlanarManipulator, obj=None):
     """
@@ -101,7 +104,7 @@ def evaluate_trajectory(traj: Trajectory, manip: PlanarManipulator, obj=None):
     
     # calculate qdot
     dq = calc_array_diff_array(traj.q)
-    print(f"dq: {dq} | dt: {dt} | traj.q: {traj.q}")
+    
     traj.qdot = dq / dt[:, np.newaxis]
 
     # calculate qdotdot
@@ -122,6 +125,20 @@ def evaluate_trajectory(traj: Trajectory, manip: PlanarManipulator, obj=None):
         traj.in_collision[i] = manip.in_collision(traj.q[i], objs=obj,base_transform=traj.base_tf)
          
     return 
+
+def evaluate_trajectory_threaded(traj, arm, concave_objs):
+    def worker():
+        start_time = time.time()
+        evaluate_trajectory(traj, arm, concave_objs)
+        function_time = time.time() - start_time
+        print(
+            f"Trajectory evaluation took {function_time:.4f} seconds "
+            f"for {len(traj.time)} time points."
+        )
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    return thread
 
 
 # calculate torque

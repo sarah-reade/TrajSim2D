@@ -26,7 +26,7 @@ from trajsim2d_core.environment import generate_random_border, generate_random_c
 from trajsim2d_core.visualisation import initialise_visualisation, visualise_object, visualise_trajectory_sync, update_trajectory_visualisation
 from trajsim2d_core.twodmanip import PlanarManipulator
 from trajsim2d_core.collision import create_convex_boundary_objects
-from trajsim2d_core.calculations import Trajectory
+from trajsim2d_core.calculations import Trajectory, evaluate_trajectory_threaded
 
 
 
@@ -135,11 +135,13 @@ class TestTrajectoryVisualisation(unittest.TestCase):
         # Visualise the trajectory asynchronously
         
         # start variables
-        start_time = time.time()
+        thread = evaluate_trajectory_threaded(self.traj, self.arm, self.concave_objs)
         
+        start_time = time.time()
+    
         print("Asynchronous visualisation starting ...")
         while True:
-            print("Updating visualisation...")
+            
             # Update visualisation
             [arm_ids, done] = update_trajectory_visualisation(time.time() - start_time,self.canvas,self.arm,self.traj
                                                             ,arm_ids,border=self.border,objs=self.concave_objs)
@@ -148,8 +150,12 @@ class TestTrajectoryVisualisation(unittest.TestCase):
             
             time.sleep(0.01)
         
+        print("Asynchronous visualisation finished. Joining thread...")
+        thread.join()
+        print("Thread completed successfully.")
         
-        print("Asynchronous visualisation finished.")
+        
+        
         
         
 if __name__ == "__main__":
