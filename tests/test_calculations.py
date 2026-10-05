@@ -357,7 +357,9 @@ class TestTrajectoryEvaluation(unittest.TestCase):
         N, n = self.q.shape
         self.assertEqual(self.traj.qdot.shape, (N-1, n))
         self.assertEqual(self.traj.qdotdot.shape, (N-2, n))
+        self.assertEqual(self.traj.qdotdot_exceeded.shape, (N,))
         self.assertEqual(self.traj.tau.shape, (N, n))
+        self.assertEqual(self.traj.tau_exceeded.shape, (N,))
         self.assertEqual(self.traj.base_wrench.shape, (N, 3))
         self.assertEqual(self.traj.in_collision.shape, (N,))
 
@@ -370,6 +372,10 @@ class TestTrajectoryEvaluation(unittest.TestCase):
             
             # Not in collision
             self.assertFalse(self.traj.in_collision[i])
+
+            # Limits are not exceeded for this static trajectory
+            self.assertFalse(self.traj.qdotdot_exceeded[i])
+            self.assertFalse(self.traj.tau_exceeded[i])
         
     
 if __name__ == '__main__':

@@ -1,0 +1,95 @@
+<robot name="trajsim2d_manipulator">
+  <trajsim2d>
+    <base_offset>0.2</base_offset>
+    <link_width>0.15</link_width>
+    <joint_radius>0.05</joint_radius>
+    <max_velocity>0.35</max_velocity>
+    <joint_position_limit>1.176005207095135</joint_position_limit>
+    <joint_torque_limit>25.0155</joint_torque_limit>
+    <clip_ends_default>0.01</clip_ends_default>
+    <link_lengths>1.0 0.75</link_lengths>
+    <link_masses>0.4 1.2 0.8</link_masses>
+    <base_transform>0.0 -1.0 1.5 1.0 0.0 -0.25 0.0 0.0 1.0</base_transform>
+    <end_effector>
+      <adhesion>2.1</adhesion>
+      <ee_width>0.4</ee_width>
+      <friction>0.7</friction>
+    </end_effector>
+  </trajsim2d>
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0.07500000000000001 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.15 0.15000000000000002 0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0.07500000000000001 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.15 0.15000000000000002 0.01" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="link_1">
+    <visual>
+      <origin xyz="0 0.5 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.15 0.9 0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0.5 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.15 0.9 0.01" />
+      </geometry>
+    </collision>
+    <visual>
+      <geometry>
+        <cylinder radius="0.05" length="0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.05" length="0.01" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint_1" type="revolute">
+    <parent link="base_link" />
+    <child link="link_1" />
+    <origin xyz="0 0.2 0" rpy="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.176005207095135" upper="1.176005207095135" effort="25.0155" velocity="0.35" />
+  </joint>
+  <link name="link_2">
+    <visual>
+      <origin xyz="0 0.375 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.15 0.7 0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0.375 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.15 0.7 0.01" />
+      </geometry>
+    </collision>
+    <visual>
+      <geometry>
+        <cylinder radius="0.05" length="0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.05" length="0.01" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint_2" type="revolute">
+    <parent link="link_1" />
+    <child link="link_2" />
+    <origin xyz="0 1.0 0" rpy="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.176005207095135" upper="1.176005207095135" effort="25.0155" velocity="0.35" />
+  </joint>
+</robot>

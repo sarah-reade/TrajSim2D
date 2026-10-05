@@ -123,11 +123,25 @@ def evaluate_trajectory(traj: Trajectory, manip: PlanarManipulator, obj=None):
 
         # calculate base wrench force
         traj.base_wrench[i] = calculate_base_wrench_force(manip=manip, base_tf=traj.base_tf, q=traj.q[i], tau=traj.tau[i])
-        traj.adhesion_exceeded = adhesion_exceeded(traj.base_wrench[i],manip.end_effector)
+        traj.adhesion_exceeded[i] = adhesion_exceeded(traj.base_wrench[i],manip.end_effector)
     
         # check if in collision
         traj.in_collision[i] = manip.in_collision(traj.q[i], objs=obj,base_transform=traj.base_tf)
          
+    # check limits exceeded
+    # qdotdot is defined at the interior time points because it is computed
+    # from the midpoint velocities.  Keep the flags aligned with traj.time.
+    traj.qdotdot_exceeded[:] = False
+    traj.qdotdot_exceeded[1:-1] = np.any(
+        np.abs(traj.qdotdot) > manip.joint_limits.velocity,
+        axis=1,
+    )
+    traj.tau_exceeded[:] = False
+    traj.tau_exceeded = np.any(
+        np.abs(traj.tau) > manip.joint_limits.torque,
+        axis=1,
+    )
+    
     return 
 
 def adhesion_exceeded(base_wrench,ee):
@@ -136,13 +150,15 @@ def adhesion_exceeded(base_wrench,ee):
         return False
     
     # calculate the max adhesion wrench based on normal force 
-    normal_force = base_wrench[1] + ee.adhesion
+    normal_force = ee.adhesion - base_wrench[1]
     
-    # check tangent force does not exceed friction
-    if base_wrench[2] > normal_force*ee.friction:
+    # check tangent and force does not exceed friction
+    if abs(base_wrench[0]) > normal_force*ee.friction:
         return False
     
-    # check tau force does not exceed friction
+    # check that rotational force does not cause it to tip
+    if abs(base_wrench[2]) > normal_force*(ee.width/2):
+        return False
     
     return True
 
@@ -312,5 +328,4 @@ def calculate_base_wrench_force(manip: PlanarManipulator, base_tf, q, qdot=None,
     
         
     return W
-
 

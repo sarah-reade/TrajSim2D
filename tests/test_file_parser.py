@@ -18,6 +18,7 @@
 ###############################################################################
 
 import unittest
+import csv
 from pathlib import Path
 from trajsim2d_core.file_parser import (
     load_canvas_from_file,
@@ -28,8 +29,13 @@ from trajsim2d_core.calculations import Trajectory, evaluate_trajectory
 from trajsim2d_core.twodmanip import PlanarManipulator
 import numpy as np
 
+TEST_OUTPUT_DIR = Path(__file__).parent / "test_outputs"
+
+
 class TestSaveTrajectory(unittest.TestCase):
     def setUp(self):
+        TEST_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
         # Simple 1-link manipulator
         self.link_length = [2.0]
         self.link_mass = [0.4, 1.5]  # last is EE
@@ -63,8 +69,34 @@ class TestSaveTrajectory(unittest.TestCase):
         evaluate_trajectory(self.traj, self.manip)
 
         # Save to file
-        filename = "/tmp/test_trajectory"
-        save_trajectory_to_file(filename, self.traj, self.manip)
+        filename = TEST_OUTPUT_DIR / "trajectory_output"
+        save_trajectory_to_file(str(filename), self.traj, self.manip)
+
+        with open(Path(filename) / "trajectory.csv", newline="") as file:
+            rows = list(csv.reader(file))
+
+        self.assertEqual(
+            rows[0][-3:],
+            [
+                "qdotdot_exceeded",
+                "tau_exceeded",
+                "adhesion_exceeded",
+            ],
+        )
+        
+        self.assertEqual(len(rows), len(self.time) + 1)
+        for row, in_collision, qdotdot_exceeded, tau_exceeded, adhesion_exceeded in zip(
+            rows[1:],
+            self.traj.in_collision,
+            self.traj.qdotdot_exceeded,
+            self.traj.tau_exceeded,
+            self.traj.adhesion_exceeded,
+        ):
+            self.assertEqual(row[-4], str(in_collision))
+            self.assertEqual(row[-3], str(qdotdot_exceeded))
+            self.assertEqual(row[-2], str(tau_exceeded))
+            self.assertEqual(row[-1], str(adhesion_exceeded))
+            
 
     def test_save_and_load_canvas_with_arm(self):
         border = np.array([[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0]])
@@ -80,7 +112,7 @@ class TestSaveTrajectory(unittest.TestCase):
         start_config = np.array([0.1])
         end_config = np.array([-0.2])
 
-        canvas_path = Path(__file__).parent / "example_canvas.canvas"
+        canvas_path = TEST_OUTPUT_DIR / "example_canvas.canvas"
         save_canvas_to_file(
             canvas_path,
             self.manip,

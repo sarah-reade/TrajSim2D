@@ -1,0 +1,10 @@
+uint8 SET_SAVE_LOCATION=0
+uint8 LOAD_ENVIRONMENT=1
+uint8 SAVE_ENVIRONMENT=2
+uint8 REQUEST_CURRENT_STATE=3
+uint8 goal
+string data
+---
+bool result
+---
+string simulation_state

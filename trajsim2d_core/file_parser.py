@@ -215,12 +215,17 @@ def save_trajectory_to_file(foldername, trajectory: Trajectory, manip: PlanarMan
                 + [f"qdotdot{j}" for j in range(trajectory.qdotdot.shape[1])] \
                 + [f"tau{j}" for j in range(trajectory.tau.shape[1])] \
                 + ["Fx", "Fy", "Mz"] \
-                + ["in_collision"]
+                + [
+                    "in_collision",
+                    "qdotdot_exceeded",
+                    "tau_exceeded",
+                    "adhesion_exceeded",
+                ]
         f.write(",".join(header) + "\n")
         
         # Write data
         for i in range(len(trajectory.time)):
-            # save q, qdot, qdotdot, tau, base_wrench, in_collision
+            # save q, qdot, qdotdot, tau, base_wrench, and status flags
             # qdot / qdotdot may not exist for last steps
             qdot_str = ",".join([str(trajectory.qdot[i, j]) for j in range(trajectory.qdot.shape[1])]) \
                         if i < trajectory.qdot.shape[0] else ",".join([""] * trajectory.qdot.shape[1])
@@ -235,7 +240,10 @@ def save_trajectory_to_file(foldername, trajectory: Trajectory, manip: PlanarMan
                 qdotdot_str + "," +
                 ",".join([str(trajectory.tau[i, j]) for j in range(trajectory.tau.shape[1])]) + "," +
                 ",".join([str(trajectory.base_wrench[i, j]) for j in range(trajectory.base_wrench.shape[1])]) + "," +
-                str(trajectory.in_collision[i])
+                str(trajectory.in_collision[i]) + "," +
+                str(trajectory.qdotdot_exceeded[i]) + "," +
+                str(trajectory.tau_exceeded[i]) + "," +
+                str(trajectory.adhesion_exceeded[i])
             )
             f.write(line + "\n")
                 

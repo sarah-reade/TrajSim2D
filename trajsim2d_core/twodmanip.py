@@ -170,11 +170,64 @@ class PlanarManipulator:
         add_value(end_effector, "ee_width", self.end_effector.width)
         add_value(end_effector, "friction", self.end_effector.friction)
 
-        ET.SubElement(robot, "link", {"name": "base_link"})
+        # URDF boxes are aligned with the simulator's local +Y link axis.
+        # They are clipped around joints so the cylindrical joint geometry is
+        # not overlapped by the link geometry.
+        thin_depth = 0.01
+
+        def add_box_geometry(link, length, centre_y, width):
+            length = max(float(length), 1e-6)
+            visual = ET.SubElement(link, "visual")
+            ET.SubElement(visual, "origin", {"xyz": f"0 {centre_y} 0", "rpy": "0 0 0"})
+            geometry = ET.SubElement(visual, "geometry")
+            ET.SubElement(
+                geometry,
+                "box",
+                {"size": f"{float(width)} {length} {thin_depth}"},
+            )
+            collision = ET.SubElement(link, "collision")
+            ET.SubElement(collision, "origin", {"xyz": f"0 {centre_y} 0", "rpy": "0 0 0"})
+            collision_geometry = ET.SubElement(collision, "geometry")
+            ET.SubElement(
+                collision_geometry,
+                "box",
+                {"size": f"{float(width)} {length} {thin_depth}"},
+            )
+
+        def add_joint_geometry(link):
+            visual = ET.SubElement(link, "visual")
+            geometry = ET.SubElement(visual, "geometry")
+            ET.SubElement(
+                geometry,
+                "cylinder",
+                {"radius": str(float(self.joint_radius)), "length": str(thin_depth)},
+            )
+            collision = ET.SubElement(link, "collision")
+            collision_geometry = ET.SubElement(collision, "geometry")
+            ET.SubElement(
+                collision_geometry,
+                "cylinder",
+                {"radius": str(float(self.joint_radius)), "length": str(thin_depth)},
+            )
+
+        base_link = ET.SubElement(robot, "link", {"name": "base_link"})
+        base_length = max(float(self.base_offset) - float(self.joint_radius), 1e-6)
+        base_width = float(np.asarray(self.link_width).flat[0])
+        add_box_geometry(base_link, base_length, base_length / 2.0, base_width)
+
         for index in range(self.n):
             parent_name = "base_link" if index == 0 else f"link_{index}"
             child_name = f"link_{index + 1}"
-            ET.SubElement(robot, "link", {"name": child_name})
+            child_link = ET.SubElement(robot, "link", {"name": child_name})
+            width_values = np.asarray(self.link_width).ravel()
+            width = float(width_values[0] if width_values.size == 1 else width_values[index])
+            if index < self.n - 1:
+                link_length = float(self.link_lengths[index]) - 2.0 * float(self.joint_radius)
+            else:
+                link_length = float(self.link_lengths[index]) - float(self.joint_radius)
+            add_box_geometry(child_link, link_length, float(self.link_lengths[index]) / 2.0, width)
+            add_joint_geometry(child_link)
+
             joint = ET.SubElement(
                 robot,
                 "joint",
@@ -182,6 +235,13 @@ class PlanarManipulator:
             )
             ET.SubElement(joint, "parent", {"link": parent_name})
             ET.SubElement(joint, "child", {"link": child_name})
+            joint_origin = float(self.base_offset) if index == 0 else float(self.link_lengths[index - 1])
+            ET.SubElement(
+                joint,
+                "origin",
+                {"xyz": f"0 {joint_origin} 0", "rpy": "0 0 0"},
+            )
+            ET.SubElement(joint, "axis", {"xyz": "0 0 1"})
             ET.SubElement(
                 joint,
                 "limit",
@@ -195,7 +255,7 @@ class PlanarManipulator:
 
         tree = ET.ElementTree(robot)
         ET.indent(tree, space="  ")
-        tree.write(filename, encoding="utf-8", xml_declaration=True)
+        tree.write(filename, encoding="utf-8", xml_declaration=False)
 
     @classmethod
     def load_from_urdf(cls, filename):

@@ -53,7 +53,7 @@ class TestVisualisation(unittest.TestCase):
             )
         )
 
-        canvas_path = Path(__file__).parent / "example_canvas.canvas"
+        canvas_path = Path(__file__).parent / "test_outputs" / "example_canvas.canvas"
         save_canvas_to_file(
             canvas_path,
             arm,
@@ -218,13 +218,11 @@ class TestTrajectoryVisualisation(unittest.TestCase):
 
         print("Thread completed successfully.")
         
-        print(np.shape(self.traj.base_wrench))
-        print(f"Max base wrench: {np.max(self.traj.base_wrench)}")
-        print(f"Min base wrench: {np.min(self.traj.base_wrench)}")
+        print(f"Velocity Exceeded:    {np.any(self.traj.qdotdot_exceeded)}")
+        
+        print(f"Torque Exceeded:    {np.any(self.traj.tau_exceeded)}")
 
-        print(np.shape(self.traj.tau))
-        print(f"Max tau:         {np.max(self.traj.tau)}")
-        print(f"Min tau:         {np.min(self.traj.tau)}")
+        print(f"Adhesion Exceeded:    {np.any(self.traj.adhesion_exceeded)}")
 
         print(f"In collision:    {np.any(self.traj.in_collision)}")
         

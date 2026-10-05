@@ -18,9 +18,13 @@
 ###############################################################################
 
 import unittest
-import tempfile
+from pathlib import Path
+import xml.etree.ElementTree as ET
 import numpy as np
 from trajsim2d_core.twodmanip import PlanarManipulator
+
+TEST_OUTPUT_DIR = Path(__file__).parent / "test_outputs"
+
 
 class TestPlanarManipulatorKinematics(unittest.TestCase):
     """
@@ -115,6 +119,11 @@ class TestPlanarManipulatorUrdfPersistence(unittest.TestCase):
     @brief Unit tests for saving and loading PlanarManipulator URDF files.
     """
 
+    @classmethod
+    def setUpClass(cls):
+        """Create the persistent test output directory once per test class."""
+        TEST_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
     def setUp(self):
         """Create a manipulator with explicit values for round-trip testing."""
         self.base_tf = np.array([
@@ -141,65 +150,90 @@ class TestPlanarManipulatorUrdfPersistence(unittest.TestCase):
         @test
         @brief Test that saving and loading preserves all saved arm attributes.
         """
-        with tempfile.TemporaryDirectory() as directory:
-            filename = f"{directory}/manipulator.urdf"
-            self.manipulator.save_to_urdf(filename)
-            loaded = PlanarManipulator.load_from_urdf(filename)
+        filename = TEST_OUTPUT_DIR / "manipulator_roundtrip.urdf"
+        self.manipulator.save_to_urdf(filename)
+        loaded = PlanarManipulator.load_from_urdf(filename)
 
-            self.assertEqual(loaded.n, self.manipulator.n)
-            self.assertEqual(loaded.base_offset, self.manipulator.base_offset)
-            self.assertEqual(loaded.link_width, self.manipulator.link_width)
-            self.assertEqual(loaded.joint_radius, self.manipulator.joint_radius)
-            np.testing.assert_allclose(
-                loaded.link_lengths, self.manipulator.link_lengths
-            )
-            np.testing.assert_allclose(
-                loaded.link_masses, self.manipulator.link_masses
-            )
-            np.testing.assert_allclose(loaded.base_tf, self.manipulator.base_tf)
-            self.assertEqual(
-                loaded.joint_limits.position,
-                self.manipulator.joint_limits.position,
-            )
-            self.assertEqual(
-                loaded.joint_limits.velocity,
-                self.manipulator.joint_limits.velocity,
-            )
-            self.assertEqual(
-                loaded.joint_limits.torque,
-                self.manipulator.joint_limits.torque,
-            )
-            self.assertEqual(
-                loaded.end_effector.adhesion,
-                self.manipulator.end_effector.adhesion,
-            )
-            self.assertEqual(
-                loaded.end_effector.width,
-                self.manipulator.end_effector.width,
-            )
-            self.assertEqual(
-                loaded.end_effector.friction,
-                self.manipulator.end_effector.friction,
-            )
+        self.assertEqual(loaded.n, self.manipulator.n)
+        self.assertEqual(loaded.base_offset, self.manipulator.base_offset)
+        self.assertEqual(loaded.link_width, self.manipulator.link_width)
+        self.assertEqual(loaded.joint_radius, self.manipulator.joint_radius)
+        np.testing.assert_allclose(
+            loaded.link_lengths, self.manipulator.link_lengths
+        )
+        np.testing.assert_allclose(
+            loaded.link_masses, self.manipulator.link_masses
+        )
+        np.testing.assert_allclose(loaded.base_tf, self.manipulator.base_tf)
+        self.assertEqual(
+            loaded.joint_limits.position,
+            self.manipulator.joint_limits.position,
+        )
+        self.assertEqual(
+            loaded.joint_limits.velocity,
+            self.manipulator.joint_limits.velocity,
+        )
+        self.assertEqual(
+            loaded.joint_limits.torque,
+            self.manipulator.joint_limits.torque,
+        )
+        self.assertEqual(
+            loaded.end_effector.adhesion,
+            self.manipulator.end_effector.adhesion,
+        )
+        self.assertEqual(
+            loaded.end_effector.width,
+            self.manipulator.end_effector.width,
+        )
+        self.assertEqual(
+            loaded.end_effector.friction,
+            self.manipulator.end_effector.friction,
+        )
 
     def test_constructor_loads_from_urdf_filename(self):
         """
         @test
         @brief Test constructor-based loading from a URDF filename.
         """
-        with tempfile.TemporaryDirectory() as directory:
-            filename = f"{directory}/manipulator.urdf"
-            self.manipulator.save_to_urdf(filename)
-            loaded = PlanarManipulator(filename=filename)
+        filename = TEST_OUTPUT_DIR / "manipulator_constructor.urdf"
+        self.manipulator.save_to_urdf(filename)
+        loaded = PlanarManipulator(filename=filename)
 
-            self.assertEqual(loaded.n, self.manipulator.n)
-            np.testing.assert_allclose(
-                loaded.link_lengths, self.manipulator.link_lengths
-            )
-            self.assertEqual(
-                loaded.end_effector.friction,
-                self.manipulator.end_effector.friction,
-            )
+        self.assertEqual(loaded.n, self.manipulator.n)
+        np.testing.assert_allclose(
+            loaded.link_lengths, self.manipulator.link_lengths
+        )
+        self.assertEqual(
+            loaded.end_effector.friction,
+            self.manipulator.end_effector.friction,
+        )
+
+    def test_saved_urdf_contains_thin_clipped_geometry(self):
+        filename = TEST_OUTPUT_DIR / "manipulator_geometry.urdf"
+        self.manipulator.save_to_urdf(filename)
+        root = ET.parse(filename).getroot()
+
+        base_box = root.find("./link[@name='base_link']/visual/geometry/box")
+        self.assertIsNotNone(base_box)
+        self.assertEqual(base_box.attrib["size"], "0.15 0.15000000000000002 0.01")
+
+        first_link = root.find("./link[@name='link_1']")
+        self.assertIsNotNone(first_link)
+        boxes = first_link.findall("./visual/geometry/box")
+        cylinders = first_link.findall("./visual/geometry/cylinder")
+        self.assertEqual(len(boxes), 1)
+        self.assertEqual(len(cylinders), 1)
+        self.assertEqual(boxes[0].attrib["size"], "0.15 0.9 0.01")
+        self.assertEqual(cylinders[0].attrib["radius"], "0.05")
+        self.assertEqual(cylinders[0].attrib["length"], "0.01")
+
+        last_box = root.find("./link[@name='link_2']/visual/geometry/box")
+        self.assertIsNotNone(last_box)
+        self.assertEqual(last_box.attrib["size"], "0.15 0.7 0.01")
+
+        joint_origin = root.find("./joint[@name='joint_2']/origin")
+        self.assertIsNotNone(joint_origin)
+        self.assertEqual(joint_origin.attrib["xyz"], "0 1.0 0")
 
 
 if __name__ == '__main__':
