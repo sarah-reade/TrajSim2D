@@ -78,8 +78,11 @@ class Trajectory:
         # Initialize dependent quantities as arrays of the correct shape
         self.qdot = np.zeros((N-1, n), dtype=np.float64)      # shape (N-1, n)
         self.qdotdot = np.zeros((N-2, n), dtype=np.float64)   # shape (N-2, n)
+        self.qdotdot_exceeded = np.zeros((N,), dtype=bool)  # shape (N,)
         self.tau = np.zeros((N, n), dtype=np.float64)         # shape (N, n)
+        self.tau_exceeded = np.zeros((N,), dtype=bool)  # shape (N,)
         self.base_wrench = np.zeros((N, 3), dtype=np.float64) # shape (N, 3)
+        self.adhesion_exceeded = np.zeros((N,), dtype=bool)  # shape (N,)
         self.in_collision = np.zeros((N,), dtype=bool)  # shape (N,)
         
 def evaluate_path(path: Path, manip: PlanarManipulator):
@@ -120,11 +123,28 @@ def evaluate_trajectory(traj: Trajectory, manip: PlanarManipulator, obj=None):
 
         # calculate base wrench force
         traj.base_wrench[i] = calculate_base_wrench_force(manip=manip, base_tf=traj.base_tf, q=traj.q[i], tau=traj.tau[i])
+        traj.adhesion_exceeded = adhesion_exceeded(traj.base_wrench[i],manip.end_effector)
     
         # check if in collision
         traj.in_collision[i] = manip.in_collision(traj.q[i], objs=obj,base_transform=traj.base_tf)
          
     return 
+
+def adhesion_exceeded(base_wrench,ee):
+    # check normal force does not exceed adhesion
+    if base_wrench[1] > ee.adhesion:
+        return False
+    
+    # calculate the max adhesion wrench based on normal force 
+    normal_force = base_wrench[1] + ee.adhesion
+    
+    # check tangent force does not exceed friction
+    if base_wrench[2] > normal_force*ee.friction:
+        return False
+    
+    # check tau force does not exceed friction
+    
+    return True
 
 def evaluate_trajectory_threaded(traj, arm, concave_objs):
     def worker():
@@ -240,8 +260,7 @@ def calculate_base_wrench_force(manip: PlanarManipulator, base_tf, q, qdot=None,
     """
     ## @brief Computes the base wrench for of the manipulator
     ##
-    ## This function calculates the base wrench force of the manipulator, based on the
-    ## the parameters of the manipulator and torque of the joints
+    ## This function calculates the base wrench force of the manipulator, based on the parameters of the manipulator and torque of the joints
     ##
     ## @param manip 2dManip: Manipulator object (supplying: gravity in base frame, pose 
     ## of each link, mass of each link, Jacobian, and torque).

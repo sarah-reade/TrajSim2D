@@ -3,3 +3,4 @@
 .pytest_cache/**
 **__pycache__**
 trajsim2d_core.egg-info/**
+docs/_build/

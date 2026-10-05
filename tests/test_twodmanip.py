@@ -18,6 +18,7 @@
 ###############################################################################
 
 import unittest
+import tempfile
 import numpy as np
 from trajsim2d_core.twodmanip import PlanarManipulator
 
@@ -107,6 +108,98 @@ class TestPlanarManipulatorKinematics(unittest.TestCase):
         first_link_tf = link_tfs[1]
         expected_y = self.link_lengths[0] / 2
         self.assertAlmostEqual(first_link_tf[1, 2], expected_y, places=6)
+
+
+class TestPlanarManipulatorUrdfPersistence(unittest.TestCase):
+    """
+    @brief Unit tests for saving and loading PlanarManipulator URDF files.
+    """
+
+    def setUp(self):
+        """Create a manipulator with explicit values for round-trip testing."""
+        self.base_tf = np.array([
+            [0.0, -1.0, 1.5],
+            [1.0, 0.0, -0.25],
+            [0.0, 0.0, 1.0],
+        ])
+        self.manipulator = PlanarManipulator(
+            base_tf=self.base_tf,
+            base_offset=0.2,
+            link_width=0.15,
+            link_lengths=np.array([1.0, 0.75]),
+            joint_radius=0.05,
+            link_masses=np.array([0.4, 1.2, 0.8]),
+            n=2,
+            max_velocity=0.35,
+            adhesion=2.1,
+            ee_width=0.4,
+            friction=0.7,
+        )
+
+    def test_save_and_load_preserves_manipulator_attributes(self):
+        """
+        @test
+        @brief Test that saving and loading preserves all saved arm attributes.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            filename = f"{directory}/manipulator.urdf"
+            self.manipulator.save_to_urdf(filename)
+            loaded = PlanarManipulator.load_from_urdf(filename)
+
+            self.assertEqual(loaded.n, self.manipulator.n)
+            self.assertEqual(loaded.base_offset, self.manipulator.base_offset)
+            self.assertEqual(loaded.link_width, self.manipulator.link_width)
+            self.assertEqual(loaded.joint_radius, self.manipulator.joint_radius)
+            np.testing.assert_allclose(
+                loaded.link_lengths, self.manipulator.link_lengths
+            )
+            np.testing.assert_allclose(
+                loaded.link_masses, self.manipulator.link_masses
+            )
+            np.testing.assert_allclose(loaded.base_tf, self.manipulator.base_tf)
+            self.assertEqual(
+                loaded.joint_limits.position,
+                self.manipulator.joint_limits.position,
+            )
+            self.assertEqual(
+                loaded.joint_limits.velocity,
+                self.manipulator.joint_limits.velocity,
+            )
+            self.assertEqual(
+                loaded.joint_limits.torque,
+                self.manipulator.joint_limits.torque,
+            )
+            self.assertEqual(
+                loaded.end_effector.adhesion,
+                self.manipulator.end_effector.adhesion,
+            )
+            self.assertEqual(
+                loaded.end_effector.width,
+                self.manipulator.end_effector.width,
+            )
+            self.assertEqual(
+                loaded.end_effector.friction,
+                self.manipulator.end_effector.friction,
+            )
+
+    def test_constructor_loads_from_urdf_filename(self):
+        """
+        @test
+        @brief Test constructor-based loading from a URDF filename.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            filename = f"{directory}/manipulator.urdf"
+            self.manipulator.save_to_urdf(filename)
+            loaded = PlanarManipulator(filename=filename)
+
+            self.assertEqual(loaded.n, self.manipulator.n)
+            np.testing.assert_allclose(
+                loaded.link_lengths, self.manipulator.link_lengths
+            )
+            self.assertEqual(
+                loaded.end_effector.friction,
+                self.manipulator.end_effector.friction,
+            )
 
 
 if __name__ == '__main__':

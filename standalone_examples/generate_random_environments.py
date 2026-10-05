@@ -10,7 +10,7 @@ from trajsim2d_core.twodmanip import PlanarManipulator
 SAVE_DIR = Path("~/Downloads").expanduser()
 SAVE_DIR.mkdir(exist_ok=True)
 
-NUM_ITERATIONS = 5  # How many random visualisations to generate
+NUM_ITERATIONS = 10  # How many random visualisations to generate
 
 for i in range(NUM_ITERATIONS):
     print(f"Iteration {i+1}/{NUM_ITERATIONS}")

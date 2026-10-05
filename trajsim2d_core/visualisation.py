@@ -76,7 +76,9 @@ def initialise_visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=Non
     
     if border is None:
         return [], np.eye(3), None, None
-    
+
+    convex_border = create_convex_boundary_objects(border)
+
     ## generate the base_transform
     if base_transform is None:
         base_transform = make_transform_2d() 
@@ -84,7 +86,6 @@ def initialise_visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=Non
         if border is not None or objs is not None:
             collision = True
             attempts = 0
-            convex_border = create_convex_boundary_objects(border) 
             while collision:
                 if attempts == attempt_max:
                     attempt_max = 1

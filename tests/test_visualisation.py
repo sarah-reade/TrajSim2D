@@ -18,6 +18,7 @@
 
 import time
 import unittest
+from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 import numpy as np
@@ -27,10 +28,72 @@ from trajsim2d_core.visualisation import initialise_visualisation, visualise_obj
 from trajsim2d_core.twodmanip import PlanarManipulator
 from trajsim2d_core.collision import create_convex_boundary_objects
 from trajsim2d_core.calculations import Trajectory, evaluate_trajectory_threaded
+from trajsim2d_core.file_parser import load_canvas_from_file, save_canvas_to_file
 
 
 
 class TestVisualisation(unittest.TestCase):
+    def test_save_load_visualisation_side_by_side(self):
+        """Display the generated scene and its canvas round-trip together."""
+        border = generate_random_border(border_size=5, smoothness=0.001)
+        _, original_obstacles = generate_random_convex_objects(
+            object_size=0.5,
+            num_objs=5,
+            smoothness=0.001,
+            border=border,
+        )
+        arm = PlanarManipulator(n=3)
+
+        original_canvas, base_tf, _, _, _, start_config, end_config = (
+            initialise_visualisation(
+                border=border,
+                objs=original_obstacles,
+                arm=arm,
+                attempt_max=30,
+            )
+        )
+
+        canvas_path = Path(__file__).parent / "example_canvas.canvas"
+        save_canvas_to_file(
+            canvas_path,
+            arm,
+            border=border,
+            obstacles=original_obstacles,
+            base_transform=base_tf,
+            start_config=start_config,
+            end_config=end_config,
+        )
+        loaded = load_canvas_from_file(canvas_path)
+
+        loaded_canvas, _, _, _, _, _, _ = initialise_visualisation(
+            border=loaded.border,
+            objs=loaded.obstacles,
+            arm=loaded.arm,
+            base_transform=loaded.base_transform,
+            joint_config_1=loaded.start_config,
+            joint_config_2=loaded.end_config,
+            attempt_max=20,
+        )
+
+        original_canvas.fig.suptitle("Original generated environment")
+        left_window = getattr(original_canvas.fig.canvas.manager, "window", None)
+        
+        loaded_canvas.fig.suptitle("Loaded environment")
+
+        # Qt-backed Matplotlib windows can be positioned reliably side by side.
+        right_window = getattr(loaded_canvas.fig.canvas.manager, "window", None)
+        if (
+            left_window is not None
+            and right_window is not None
+            and hasattr(left_window, "setGeometry")
+            and hasattr(right_window, "setGeometry")
+        ):
+            left_window.setGeometry(0, 0, 600, 600)
+            right_window.setGeometry(610, 0, 600, 600)
+
+        plt.show(block=True)
+        self.assertTrue(canvas_path.exists())
+
     def test_initialise_visualisation_border_user_confirm(self):
         # Generate a random bumpy border for testing
         border = generate_random_border(border_size=5, smoothness=0.5)
@@ -65,8 +128,8 @@ class TestVisualisation(unittest.TestCase):
         # Generate a random arm for testing
         arm = PlanarManipulator(n=3)
         arm.print_parameters()
-        # config_1 = [arm.joint_limit for _ in range(arm.n)]
-        # config_2 = [-arm.joint_limit for _ in range(arm.n)]
+        # config_1 = [arm.joint_limits.position for _ in range(arm.n)]
+        # config_2 = [-arm.joint_limits.position for _ in range(arm.n)]
 
         # Initialise the visualisation
         canvas, base_tf, border_id, object_ids, arm_ids, joint_config_1, joint_config_2  = initialise_visualisation(border=border,objs=objs,arm=arm,attempt_max=20)
@@ -82,7 +145,7 @@ class TestVisualisation(unittest.TestCase):
 class TestTrajectoryVisualisation(unittest.TestCase):
     def setUp(self):
         # Get joint number
-        n_joints = 3
+        n_joints = 4
         
         # Simple 1-link manipulator
         self.arm = PlanarManipulator(n=n_joints)
@@ -95,7 +158,7 @@ class TestTrajectoryVisualisation(unittest.TestCase):
         objs, self.concave_objs = generate_random_convex_objects(object_size=0.5,num_objs=5,smoothness=0.001)
         
         # Initialise the visualisation
-        self.canvas, base_tf, border_id, object_ids, arm_ids, joint_config_1, joint_config_2  = initialise_visualisation(border=self.border,objs=self.concave_objs,arm=self.arm,attempt_max=20)
+        self.canvas, base_tf, border_id, object_ids, arm_ids, joint_config_1, joint_config_2  = initialise_visualisation(border=self.border,objs=self.concave_objs,arm=self.arm,attempt_max=10)
         
         # Create a smooth trajectory for testing
         # Number of points
@@ -152,9 +215,18 @@ class TestTrajectoryVisualisation(unittest.TestCase):
         
         print("Asynchronous visualisation finished. Joining thread...")
         thread.join()
+
         print("Thread completed successfully.")
         
-        
+        print(np.shape(self.traj.base_wrench))
+        print(f"Max base wrench: {np.max(self.traj.base_wrench)}")
+        print(f"Min base wrench: {np.min(self.traj.base_wrench)}")
+
+        print(np.shape(self.traj.tau))
+        print(f"Max tau:         {np.max(self.traj.tau)}")
+        print(f"Min tau:         {np.min(self.traj.tau)}")
+
+        print(f"In collision:    {np.any(self.traj.in_collision)}")
         
         
         

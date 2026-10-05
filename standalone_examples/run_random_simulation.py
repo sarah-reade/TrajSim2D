@@ -35,9 +35,9 @@
 
 # Run trajectory
 
-## Async visualise trajectory (visualisation)
+## Async calculate outputs (calculations)
 
-## Sync calculate outputs (calculations)
+## loop update visualise trajectory (visualisation)
 
 ## Save outputs (utils)
 

@@ -1,0 +1,39 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="trajsim2d_manipulator">
+  <trajsim2d>
+    <base_offset>0.3221343334292148</base_offset>
+    <link_width>0.06354915713296945</link_width>
+    <joint_radius>0.03949187165852287</joint_radius>
+    <max_velocity>0.2696950696417709</max_velocity>
+    <joint_position_limit>1.7865314596626969</joint_position_limit>
+    <joint_torque_limit>94.48795383671222</joint_torque_limit>
+    <clip_ends_default>0.01</clip_ends_default>
+    <link_lengths>0.6568339397045214 0.815002368054982 0.12143863968595013</link_lengths>
+    <link_masses>4.730626050126918 3.53620115103214 4.330190352913028 0.4248312775631403</link_masses>
+    <base_transform>-0.7203221475967967 0.6936396785662846 1.582130790599469 -0.6936396785662846 -0.7203221475967967 4.735767054285107 0.0 0.0 1.0</base_transform>
+    <end_effector>
+      <adhesion>17.322774044814068</adhesion>
+      <ee_width>0.13688455977061814</ee_width>
+      <friction>0.7779344639356995</friction>
+    </end_effector>
+  </trajsim2d>
+  <link name="base_link" />
+  <link name="link_1" />
+  <joint name="joint_1" type="revolute">
+    <parent link="base_link" />
+    <child link="link_1" />
+    <limit lower="-1.7865314596626969" upper="1.7865314596626969" effort="94.48795383671222" velocity="0.2696950696417709" />
+  </joint>
+  <link name="link_2" />
+  <joint name="joint_2" type="revolute">
+    <parent link="link_1" />
+    <child link="link_2" />
+    <limit lower="-1.7865314596626969" upper="1.7865314596626969" effort="94.48795383671222" velocity="0.2696950696417709" />
+  </joint>
+  <link name="link_3" />
+  <joint name="joint_3" type="revolute">
+    <parent link="link_2" />
+    <child link="link_3" />
+    <limit lower="-1.7865314596626969" upper="1.7865314596626969" effort="94.48795383671222" velocity="0.2696950696417709" />
+  </joint>
+</robot>

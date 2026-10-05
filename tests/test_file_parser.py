@@ -18,7 +18,12 @@
 ###############################################################################
 
 import unittest
-from trajsim2d_core.file_parser import save_trajectory_to_file
+from pathlib import Path
+from trajsim2d_core.file_parser import (
+    load_canvas_from_file,
+    save_canvas_to_file,
+    save_trajectory_to_file,
+)
 from trajsim2d_core.calculations import Trajectory, evaluate_trajectory
 from trajsim2d_core.twodmanip import PlanarManipulator
 import numpy as np
@@ -60,5 +65,45 @@ class TestSaveTrajectory(unittest.TestCase):
         # Save to file
         filename = "/tmp/test_trajectory"
         save_trajectory_to_file(filename, self.traj, self.manip)
+
+    def test_save_and_load_canvas_with_arm(self):
+        border = np.array([[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0]])
+        obstacles = [
+            np.array([[1.0, 1.0], [1.5, 1.0], [1.5, 1.5], [1.0, 1.5]]),
+            np.array([[2.0, 2.0], [2.5, 2.0], [2.25, 2.5]]),
+        ]
+        base_transform = np.array([
+            [0.0, -1.0, 2.0],
+            [1.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+        ])
+        start_config = np.array([0.1])
+        end_config = np.array([-0.2])
+
+        canvas_path = Path(__file__).parent / "example_canvas.canvas"
+        save_canvas_to_file(
+            canvas_path,
+            self.manip,
+            border=border,
+            obstacles=obstacles,
+            base_transform=base_transform,
+            start_config=start_config,
+            end_config=end_config,
+        )
+
+        loaded = load_canvas_from_file(canvas_path)
+
+        self.assertTrue(canvas_path.with_suffix(".urdf").exists())
+        np.testing.assert_allclose(loaded.border, border)
+        self.assertEqual(len(loaded.obstacles), len(obstacles))
+        for actual, expected in zip(loaded.obstacles, obstacles):
+            np.testing.assert_allclose(actual, expected)
+        np.testing.assert_allclose(loaded.base_transform, base_transform)
+        np.testing.assert_allclose(loaded.arm.base_tf, base_transform)
+        np.testing.assert_allclose(loaded.start_config, start_config)
+        np.testing.assert_allclose(loaded.end_config, end_config)
+        np.testing.assert_allclose(
+            loaded.arm.link_lengths, self.manip.link_lengths
+        )
         
         
