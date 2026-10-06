@@ -291,6 +291,10 @@ class TrajSim2DNode(Node):
     def _state_machine_loop(self) -> None:
         """Process one requested action and return to a passive state."""
         if self._pending_goal is None:
+            # Visualise
+            if self.state == self.SIMULATING:
+                self._advance_trajectory()
+            self._refresh_visualisation()
             return
 
         request = self._pending_goal
@@ -341,9 +345,6 @@ class TrajSim2DNode(Node):
         """Advance simulation and publish ROS/visualisation outputs."""
         if self.manipulator is None or self.positions is None or self.velocities is None:
             return
-        if self.state == self.SIMULATING:
-            self._advance_trajectory()
-        self._refresh_visualisation()
         now = self.get_clock().now().to_msg()
         names = [f"joint_{index + 1}" for index in range(self.manipulator.n)]
         state = JointState()
