@@ -74,10 +74,9 @@ def initialise_visualise_arm(canvas,arm=PlanarManipulator(),border=None,objs=Non
     @ brief adds an arm to the canvas
     """
     
-    if border is None:
-        return [], np.eye(3), None, None
-
-    convex_border = create_convex_boundary_objects(border)
+    convex_border = (
+        create_convex_boundary_objects(border) if border is not None else None
+    )
 
     ## generate the base_transform
     if base_transform is None:

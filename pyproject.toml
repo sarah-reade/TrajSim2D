@@ -9,6 +9,7 @@ description = "2D trajectory simulation core library"
 requires-python = ">=3.8"
 dependencies = [
     "numpy",
+    "matplotlib",
 ]
 
 [tool.setuptools.packages.find]

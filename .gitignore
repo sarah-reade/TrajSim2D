@@ -4,3 +4,5 @@
 **__pycache__**
 trajsim2d_core.egg-info/**
 docs/_build/
+.vscode/settings.json
+tests/test_outputs/**

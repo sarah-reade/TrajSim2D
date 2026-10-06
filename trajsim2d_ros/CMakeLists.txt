@@ -13,14 +13,16 @@ find_package(tf2_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/JointVelocity.msg"
   "action/Simulation.action"
-  DEPENDENCIES std_msgs
 )
 
-# Use a distinct CMake target name because rosidl_generate_interfaces creates
-# targets named after the ROS package itself.
-ament_python_install_package(${PROJECT_NAME}_py PACKAGE_DIR ${PROJECT_NAME})
+# rosidl generates the Python package directory with the same name as this
+# package. Install the node module into that directory instead of invoking
+# ament_python_install_package, whose package-name filter would exclude it.
+install(FILES
+  ${PROJECT_NAME}/node.py
+  DESTINATION ${PYTHON_INSTALL_DIR}/${PROJECT_NAME}
+)
 install(PROGRAMS
   scripts/trajsim2d_node
   DESTINATION lib/${PROJECT_NAME}

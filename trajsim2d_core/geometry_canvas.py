@@ -95,6 +95,9 @@ class GeometryCanvas:
         plt.ion()
         plt.show()
         
+    def close(self):
+        plt.close(self.fig)
+        
     def refresh(self):
         """
         @brief Refresh the canvas to reflect any changes made to shapes.
