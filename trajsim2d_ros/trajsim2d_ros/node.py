@@ -4,19 +4,22 @@ from __future__ import annotations
 
 import math
 import threading
+import tempfile
 import time
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 import rclpy
-from geometry_msgs.msg import PoseStamped, TransformStamped
+from geometry_msgs.msg import TransformStamped
 from nav_msgs.msg import OccupancyGrid
 from rclpy.action import ActionServer, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
+from std_msgs.msg import String
 from tf2_msgs.msg import TFMessage
 from trajectory_msgs.msg import JointTrajectory
 
@@ -52,13 +55,13 @@ class TrajSim2DNode(Node):
         self.declare_parameter("base_frame", "base_link")
         self.declare_parameter("resolution", 0.05)
         self.declare_parameter("publish_rate", 30.0)
-        self.declare_parameter("visualisation", True)
+        self.declare_parameter("headless", False)
 
         self.canvas = None
         self.frame_id = str(self.get_parameter("frame_id").value)
         self.base_frame = str(self.get_parameter("base_frame").value)
         self.resolution = float(self.get_parameter("resolution").value)
-        self.visualisation_enabled = bool(self.get_parameter("visualisation").value)
+        self.headless = bool(self.get_parameter("headless").value)
         if self.resolution <= 0.0:
             raise ValueError("resolution must be positive")
 
@@ -68,6 +71,8 @@ class TrajSim2DNode(Node):
         self.base_transform = np.eye(3)
         self.positions: Optional[np.ndarray] = None
         self.velocities: Optional[np.ndarray] = None
+        self.start_config: Optional[np.ndarray] = None
+        self.goal_config: Optional[np.ndarray] = None
         self.trajectory: Optional[List[Tuple[float, np.ndarray, np.ndarray]]] = None
         self.trajectory_start_time: Optional[float] = None
         self.save_location: Optional[Path] = None
@@ -78,10 +83,19 @@ class TrajSim2DNode(Node):
         self._callback_group = ReentrantCallbackGroup()
         self.visualisation_canvas: Optional[GeometryCanvas] = None
         self.visualisation_arm_ids: List[str] = []
+        self._cost_map_cache: Optional[OccupancyGrid] = None
 
         self.robot_state_pub = self.create_publisher(JointState, "robot_state", 10)
-        self.goal_pose_pub = self.create_publisher(PoseStamped, "goal_pose", 10)
+        self.goal_pose_pub = self.create_publisher(JointState, "goal_pose", 10)
         self.cost_map_pub = self.create_publisher(OccupancyGrid, "cost_map", 1)
+        description_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.robot_description_pub = self.create_publisher(
+            String, "robot_description", description_qos
+        )
         self.tf_pub = self.create_publisher(TFMessage, "/tf", 10)
         self.trajectory_sub = self.create_subscription(
             JointTrajectory,
@@ -100,9 +114,6 @@ class TrajSim2DNode(Node):
         rate = float(self.get_parameter("publish_rate").value)
         if rate <= 0.0:
             raise ValueError("publish_rate must be positive")
-        self.state_machine_timer = self.create_timer(
-            0.05, self._state_machine_loop, callback_group=self._callback_group
-        )
         self.interrupt_timer = self.create_timer(
             1.0 / rate, self._interrupt_loop, callback_group=self._callback_group
         )
@@ -173,7 +184,7 @@ class TrajSim2DNode(Node):
         self.start_config = loaded.start_config
         self.goal_config = loaded.end_config
 
-        if self.visualisation_enabled:
+        if not self.headless:
             self._reset_visualisation()
             (
                 self.canvas,
@@ -193,6 +204,10 @@ class TrajSim2DNode(Node):
             )
 
         self._reset_robot_state()
+        self._cost_map_cache = self._create_cost_map(
+            self.get_clock().now().to_msg()
+        )
+        self._publish_robot_description()
 
     def _generate_random_environment(self) -> None:
         border_size = 5.0
@@ -204,8 +219,8 @@ class TrajSim2DNode(Node):
         )
         self.base_transform = np.eye(3)
         self.start_config = np.zeros(self.manipulator.n, dtype=float)
-        self.goal_config = None
-        if self.visualisation_enabled:
+        self.goal_config = np.zeros(self.manipulator.n, dtype=float)
+        if not self.headless:
             self._reset_visualisation()
             (
                 self.canvas,
@@ -219,15 +234,35 @@ class TrajSim2DNode(Node):
                 border=self.border,
                 objs=self.obstacles,
                 arm=self.manipulator,
-                base_transform=self.base_transform,
-                joint_config_1=self.start_config,
-                attempt_max=20,
+                attempt_max=20
             )
 
         self._reset_robot_state()
+        self._cost_map_cache = self._create_cost_map(
+            self.get_clock().now().to_msg()
+        )
+        self._publish_robot_description()
+
+    def _publish_robot_description(self) -> None:
+        if self.manipulator is None:
+            return
+        temporary_path: Optional[Path] = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w+b", suffix=".urdf", delete=False
+            ) as temporary_file:
+                temporary_path = Path(temporary_file.name)
+            self.manipulator.save_to_urdf(str(temporary_path))
+            description = temporary_path.read_text(encoding="utf-8")
+            message = String()
+            message.data = description
+            self.robot_description_pub.publish(message)
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
 
     def _reset_visualisation(self) -> None:
-        if not self.visualisation_enabled:
+        if self.headless:
             return
         if self.canvas is not None:
             self.canvas.close()
@@ -243,7 +278,7 @@ class TrajSim2DNode(Node):
         self.trajectory_start_time = None
 
     def _refresh_visualisation(self) -> None:
-        if not self.visualisation_enabled:
+        if self.headless:
             return
         if self.canvas is not None:
             self.canvas.refresh()
@@ -288,7 +323,7 @@ class TrajSim2DNode(Node):
         goal_handle.publish_feedback(feedback)
         return result
 
-    def _state_machine_loop(self) -> None:
+    def _main_loop(self) -> None:
         """Process one requested action and return to a passive state."""
         if self._pending_goal is None:
             # Visualise
@@ -343,7 +378,7 @@ class TrajSim2DNode(Node):
 
     def _interrupt_loop(self) -> None:
         """Advance simulation and publish ROS/visualisation outputs."""
-        if self.manipulator is None or self.positions is None or self.velocities is None:
+        if (self.state is not self.IDLE and self.state is not self.SIMULATING) or self.manipulator is None or self.positions is None or self.velocities is None:
             return
         now = self.get_clock().now().to_msg()
         names = [f"joint_{index + 1}" for index in range(self.manipulator.n)]
@@ -355,16 +390,29 @@ class TrajSim2DNode(Node):
         state.velocity = self.velocities.tolist()
         self.robot_state_pub.publish(state)
 
-        tfs = self.manipulator.forward_kinematics(self.base_transform, self.positions)
+        fk_tfs = self.manipulator.forward_kinematics(
+            self.base_transform, self.positions
+        )
+        link_tfs = []
+        for index in range(self.manipulator.n):
+            link_tf = fk_tfs[index].copy()
+            link_tf[:2, :2] = fk_tfs[index + 1][:2, :2]
+            link_tfs.append(link_tf)
+        tfs = [self.base_transform, *link_tfs]
         self.tf_pub.publish(TFMessage(transforms=self._transforms(tfs, now)))
-        goal = PoseStamped()
+        goal = JointState()
         goal.header.stamp = now
         goal.header.frame_id = self.frame_id
-        goal.pose.position.x = float(tfs[-1][0, 2])
-        goal.pose.position.y = float(tfs[-1][1, 2])
-        goal.pose.orientation.z, goal.pose.orientation.w = self._yaw_quaternion(tfs[-1])
+        goal.name = names
+        goal.position = (
+            self.goal_config.tolist()
+            if self.goal_config is not None
+            else self.positions.tolist()
+        )
         self.goal_pose_pub.publish(goal)
-        self.cost_map_pub.publish(self._cost_map(now))
+
+        if self._cost_map_cache is not None:
+            self.cost_map_pub.publish(self._cost_map_cache)
 
     def _advance_trajectory(self) -> None:
         if self.trajectory is None or self.trajectory_start_time is None:
@@ -390,17 +438,26 @@ class TrajSim2DNode(Node):
 
     def _transforms(self, tfs: Sequence[np.ndarray], stamp) -> List[TransformStamped]:
         transforms = []
+        parent_tf = np.eye(3)
         for index, tf in enumerate(tfs):
+            relative_tf = np.linalg.inv(parent_tf) @ tf
             message = TransformStamped()
             message.header.stamp = stamp
-            message.header.frame_id = self.frame_id
+            message.header.frame_id = (
+                self.frame_id
+                if index == 0
+                else self.base_frame
+                if index == 1
+                else f"link_{index - 1}"
+            )
             message.child_frame_id = self.base_frame if index == 0 else f"link_{index}"
-            message.transform.translation.x = float(tf[0, 2])
-            message.transform.translation.y = float(tf[1, 2])
+            message.transform.translation.x = float(relative_tf[0, 2])
+            message.transform.translation.y = float(relative_tf[1, 2])
             message.transform.rotation.z, message.transform.rotation.w = (
-                self._yaw_quaternion(tf)
+                self._yaw_quaternion(relative_tf)
             )
             transforms.append(message)
+            parent_tf = tf
         return transforms
 
     @staticmethod
@@ -408,51 +465,183 @@ class TrajSim2DNode(Node):
         yaw = math.atan2(float(tf[1, 0]), float(tf[0, 0]))
         return math.sin(yaw / 2.0), math.cos(yaw / 2.0)
 
-    def _cost_map(self, stamp) -> OccupancyGrid:
-        scene_polygons = [polygon for polygon in [self.border, *self.obstacles] if polygon is not None]
-        occupied_polygons = self.obstacles
+    def _create_cost_map(self, stamp) -> OccupancyGrid:
+        scene_polygons = [
+            polygon
+            for polygon in [self.border, *self.obstacles]
+            if polygon is not None
+        ]
+
         points = (
             np.vstack(scene_polygons)
             if scene_polygons
             else np.array([[0.0, 0.0], [1.0, 1.0]])
         )
-        minimum = np.floor(points.min(axis=0) / self.resolution) * self.resolution
-        maximum = np.ceil(points.max(axis=0) / self.resolution) * self.resolution
-        width = max(1, int(round((maximum[0] - minimum[0]) / self.resolution)) + 1)
-        height = max(1, int(round((maximum[1] - minimum[1]) / self.resolution)) + 1)
-        data = np.full(width * height, -1, dtype=np.int8)
-        for row in range(height):
-            for column in range(width):
-                point = minimum + self.resolution * np.array([column + 0.5, row + 0.5])
-                if any(
-                    self._inside_polygon(point, polygon)
-                    for polygon in occupied_polygons
-                ):
-                    data[row * width + column] = 100
+
+        resolution = self.resolution
+
+        minimum = (
+            np.floor(points.min(axis=0) / resolution) * resolution
+        )
+        maximum = (
+            np.ceil(points.max(axis=0) / resolution) * resolution
+        )
+
+        width = max(
+            1,
+            int(round((maximum[0] - minimum[0]) / resolution)) + 1,
+        )
+        height = max(
+            1,
+            int(round((maximum[1] - minimum[1]) / resolution)) + 1,
+        )
+
+        # Cell centres.
+        x = minimum[0] + resolution * (np.arange(width) + 0.5)
+        y = minimum[1] + resolution * (np.arange(height) + 0.5)
+
+        xx, yy = np.meshgrid(x, y)
+
+        occupied = np.zeros((height, width), dtype=bool)
+
+        # Obstacles.
+        for polygon in self.obstacles:
+            if polygon is None or len(polygon) < 3:
+                continue
+
+            occupied |= self._points_inside_polygon(
+                xx,
+                yy,
+                polygon,
+            )
+
+        # Border.
+        if self.border is not None and len(self.border) >= 2:
+            occupied |= self._points_near_polygon_boundary(
+                xx,
+                yy,
+                self.border,
+                resolution,
+            )
+
+        data = np.full((height, width), -1, dtype=np.int8)
+        data[occupied] = 100
+
         message = OccupancyGrid()
         message.header.stamp = stamp
         message.header.frame_id = self.frame_id
-        message.info.resolution = self.resolution
+
+        message.info.resolution = resolution
         message.info.width = width
         message.info.height = height
+
         message.info.origin.position.x = float(minimum[0])
         message.info.origin.position.y = float(minimum[1])
         message.info.origin.orientation.w = 1.0
-        message.data = data.tolist()
+
+        message.data = data.ravel().tolist()
+
         return message
 
+
     @staticmethod
-    def _inside_polygon(point: np.ndarray, polygon: np.ndarray) -> bool:
-        x, y = point
-        inside = False
-        for first, second in zip(polygon, np.roll(polygon, -1, axis=0)):
-            if (first[1] > y) != (second[1] > y):
-                crossing = (second[0] - first[0]) * (y - first[1]) / (
-                    second[1] - first[1]
-                ) + first[0]
-                if x < crossing:
-                    inside = not inside
-        return inside
+    def _points_inside_polygon(
+        xx: np.ndarray,
+        yy: np.ndarray,
+        polygon: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Vectorized ray-casting point-in-polygon test.
+        """
+
+        x = xx.ravel()
+        y = yy.ravel()
+
+        first = polygon
+        second = np.roll(polygon, -1, axis=0)
+
+        x1 = first[:, 0]
+        y1 = first[:, 1]
+        x2 = second[:, 0]
+        y2 = second[:, 1]
+
+        inside = np.zeros(x.shape, dtype=bool)
+
+        for i in range(len(polygon)):
+            yi = y1[i]
+            yj = y2[i]
+            xi = x1[i]
+            xj = x2[i]
+
+            crosses = (yi > y) != (yj > y)
+
+            if not np.any(crosses):
+                continue
+
+            crossing_x = (
+                (xj - xi) * (y[crosses] - yi) / (yj - yi) + xi
+            )
+
+            inside[crosses] ^= x[crosses] < crossing_x
+
+        return inside.reshape(xx.shape)
+
+
+    @staticmethod
+    def _points_near_polygon_boundary(
+        xx: np.ndarray,
+        yy: np.ndarray,
+        polygon: np.ndarray,
+        resolution: float,
+    ) -> np.ndarray:
+        """
+        Vectorized test for grid-cell centres near a polygon boundary.
+        """
+
+        x = xx.ravel()
+        y = yy.ravel()
+
+        near = np.zeros(x.shape, dtype=bool)
+
+        threshold_squared = (resolution * np.sqrt(2.0) * 0.5) ** 2
+
+        first = polygon
+        second = np.roll(polygon, -1, axis=0)
+
+        for p1, p2 in zip(first, second):
+            dx = p2[0] - p1[0]
+            dy = p2[1] - p1[1]
+
+            length_squared = dx * dx + dy * dy
+
+            if length_squared == 0.0:
+                distance_squared = (
+                    (x - p1[0]) ** 2 +
+                    (y - p1[1]) ** 2
+                )
+            else:
+                projection = (
+                    (x - p1[0]) * dx +
+                    (y - p1[1]) * dy
+                ) / length_squared
+
+                projection = np.clip(projection, 0.0, 1.0)
+
+                closest_x = p1[0] + projection * dx
+                closest_y = p1[1] + projection * dy
+
+                distance_squared = (
+                    (x - closest_x) ** 2 +
+                    (y - closest_y) ** 2
+                )
+
+            near |= distance_squared <= threshold_squared
+
+            # Avoid doing more work once every cell is classified.
+            if near.all():
+                break
+
+        return near.reshape(xx.shape)
 
 
 def main(args=None) -> None:
@@ -460,9 +649,14 @@ def main(args=None) -> None:
     node = TrajSim2DNode()
     executor = MultiThreadedExecutor(num_threads=2)
     executor.add_node(node)
+    spin_thread = threading.Thread(target=executor.spin, daemon=True)
+    spin_thread.start()
     try:
-        executor.spin()
+        while rclpy.ok():
+            node._main_loop()
+            time.sleep(0.01)
     finally:
         executor.shutdown()
+        spin_thread.join()
         node.destroy_node()
         rclpy.shutdown()

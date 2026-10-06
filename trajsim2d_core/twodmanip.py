@@ -223,9 +223,13 @@ class PlanarManipulator:
             width = float(width_values[0] if width_values.size == 1 else width_values[index])
             if index < self.n - 1:
                 link_length = float(self.link_lengths[index]) - 2.0 * float(self.joint_radius)
+                add_box_geometry(child_link, link_length, float(self.link_lengths[index]) / 2.0, width)
             else:
                 link_length = float(self.link_lengths[index]) - float(self.joint_radius)
-            add_box_geometry(child_link, link_length, float(self.link_lengths[index]) / 2.0, width)
+                add_box_geometry(child_link, link_length, (float(self.link_lengths[index])+float(self.joint_radius))/2.0, width)
+                
+                
+                                
             add_joint_geometry(child_link)
 
             joint = ET.SubElement(

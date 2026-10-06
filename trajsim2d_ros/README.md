@@ -9,12 +9,18 @@ This package exposes the core simulator as the `trajsim2d` node.
   joints, optional velocities for all joints, and strictly increasing
   `time_from_start` values. Joint names must be `joint_1`, `joint_2`, etc.
 - Publishes `sensor_msgs/msg/JointState` on `/robot_state`.
-- Publishes `geometry_msgs/msg/PoseStamped` on `/goal_pose`. The pose is the
-  end-effector pose in `map`.
+- Publishes `sensor_msgs/msg/JointState` on `/goal_pose`. The message contains
+  the goal joint configuration.
 - Publishes `nav_msgs/msg/OccupancyGrid` on `/cost_map`.
+- Publishes the current manipulator URDF as `std_msgs/msg/String` on
+  `/robot_description` whenever an environment is loaded or generated. This
+  topic uses transient-local QoS so late subscribers receive the latest
+  description. It is not published while the node is `VACANT`.
 - Publishes `tf2_msgs/msg/TFMessage` on `/tf`, containing `map` to
   `base_link` and each `link_N` transform.
 - Provides the `trajsim2d_ros/action/Simulation` action on `/simulation`.
+- The `headless` parameter defaults to `false`. Set it to `true` to disable
+  the Matplotlib visualisation.
 
 The action goal values are `0` (get current state), `1` (generate random
 environment), `2` (load environment from file), `3` (set the trajectory
@@ -29,6 +35,12 @@ package:
 ```bash
 colcon build --packages-select trajsim2d_ros --symlink-install
 ros2 run trajsim2d_ros trajsim2d_node
+```
+
+To run without opening a visualisation window (currently not functional):
+
+```bash
+ros2 run trajsim2d_ros trajsim2d_node --ros-args -p headless:=true
 ```
 
 An environment is loaded through the action using a `.canvas` file produced
