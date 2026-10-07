@@ -148,13 +148,14 @@ def update_trajectory_visualisation(time,canvas : GeometryCanvas,arm,trajectory,
     
     @return new_arm_ids Updated list of shape IDs for the arm segments.
     @return done Boolean indicating if the trajectory has completed.
+    @return index of current state in trajectory
     """
     
     # Find the index corresponding to the given time
     index = np.searchsorted(trajectory.time, time)
     if index >= len(trajectory.time):
         index = len(trajectory.time) - 1
-        return arm_ids, True
+        return arm_ids, True, index
     
     # Remove existing arm shapes
     for id in arm_ids:
@@ -170,7 +171,7 @@ def update_trajectory_visualisation(time,canvas : GeometryCanvas,arm,trajectory,
     
     canvas.refresh()
     
-    return new_arm_ids, False
+    return new_arm_ids, False, index
 
 
 # Sync visualise trajectory
@@ -191,7 +192,7 @@ def visualise_trajectory_sync(canvas : GeometryCanvas,arm,trajectory,border=None
     while True:
         
         # Update visualisation
-        [arm_ids, done] = update_trajectory_visualisation(time.time() - start_time,canvas,arm,trajectory
+        [arm_ids, done,_] = update_trajectory_visualisation(time.time() - start_time,canvas,arm,trajectory
                                                         ,arm_ids,border=border,objs=objs)
         if done:
             return arm_ids

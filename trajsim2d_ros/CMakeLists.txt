@@ -21,10 +21,12 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 # ament_python_install_package, whose package-name filter would exclude it.
 install(FILES
   ${PROJECT_NAME}/node.py
+  ${PROJECT_NAME}/direct_trajectory_test_node.py
   DESTINATION ${PYTHON_INSTALL_DIR}/${PROJECT_NAME}
 )
 install(PROGRAMS
   scripts/trajsim2d_node
+  scripts/direct_trajectory_test_node
   DESTINATION lib/${PROJECT_NAME}
 )
 install(DIRECTORY launch

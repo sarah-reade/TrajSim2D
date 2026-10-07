@@ -144,6 +144,14 @@ def evaluate_trajectory(traj: Trajectory, manip: PlanarManipulator, obj=None):
     
     return 
 
+def calculate_robot_state(manip:PlanarManipulator,traj:Trajectory,index):
+    dt = traj.time[index]-traj.time[index-1]
+    
+    q = traj.q[index]
+    qdot = (traj.q[index] - traj.q[index-1])/dt
+    tau = calculate_torque(manip,manip.base_tf,q)
+    return q,qdot,tau
+
 def adhesion_exceeded(base_wrench,ee):
     # check normal force does not exceed adhesion
     if base_wrench[1] > ee.adhesion:

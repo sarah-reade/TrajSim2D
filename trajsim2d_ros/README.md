@@ -37,11 +37,40 @@ colcon build --packages-select trajsim2d_ros --symlink-install
 ros2 run trajsim2d_ros trajsim2d_node
 ```
 
-To run without opening a visualisation window (currently not functional):
+### One-shot direct trajectory test
+
+Start the simulator first so that `/robot_state` and `/goal_pose` are
+available:
 
 ```bash
 ros2 run trajsim2d_ros trajsim2d_node --ros-args -p headless:=true
 ```
+
+Then start the test node:
+
+```bash
+ros2 run trajsim2d_ros direct_trajectory_test_node
+```
+
+The test node waits for the first messages on `/robot_state` and `/goal_pose`,
+then publishes exactly one `trajectory_msgs/msg/JointTrajectory` message on
+`/motion_planner/trajectory`. The trajectory is a direct straight line in
+joint configuration space with a smoothstep time profile and zero velocity at
+both endpoints. It contains 21 points and takes three seconds by default.
+
+Change the duration or number of points with ROS parameters:
+
+```bash
+ros2 run trajsim2d_ros direct_trajectory_test_node --ros-args \
+  -p duration:=5.0 \
+  -p samples:=31
+```
+
+After publishing, the test node stays alive but ignores subsequent state
+updates, so it can be stopped with `Ctrl-C`.
+
+To run the simulator with its visualisation enabled instead, omit
+`-p headless:=true` from the simulator command.
 
 An environment is loaded through the action using a `.canvas` file produced
 by `save_canvas_to_file`. The canvas contains the relative path to its

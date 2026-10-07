@@ -19,6 +19,7 @@
 
 import unittest
 import csv
+import json
 from pathlib import Path
 from trajsim2d_core.file_parser import (
     load_canvas_from_file,
@@ -96,6 +97,13 @@ class TestSaveTrajectory(unittest.TestCase):
             self.assertEqual(row[-3], str(qdotdot_exceeded))
             self.assertEqual(row[-2], str(tau_exceeded))
             self.assertEqual(row[-1], str(adhesion_exceeded))
+
+        with open(Path(filename) / "metadata.json", encoding="utf-8") as file:
+            metadata = json.load(file)
+        self.assertEqual(
+            metadata["manipulator_parameters"]["link_lengths"],
+            self.manip.link_lengths,
+        )
             
 
     def test_save_and_load_canvas_with_arm(self):

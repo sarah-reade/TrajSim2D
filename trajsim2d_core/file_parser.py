@@ -49,6 +49,14 @@ def _array_to_json(value):
     return np.asarray(value, dtype=float).tolist()
 
 
+def _value_to_json(value):
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
 def _load_array(value, name, ndim=None):
     if value is None:
         return None
@@ -206,8 +214,8 @@ def save_trajectory_to_file(foldername, trajectory: Trajectory, manip: PlanarMan
     if not os.path.exists(foldername):
         os.makedirs(foldername)
     
-    
-    with open(foldername + "/trajectory.csv", 'w') as f:
+    print("Saving file to: %s", str(foldername) + "/trajectory.csv")
+    with open(str(foldername) + "/trajectory.csv", 'w') as f:
         # Write header
         header = ["time"] \
                 + [f"q{j}" for j in range(trajectory.q.shape[1])] \
@@ -246,17 +254,20 @@ def save_trajectory_to_file(foldername, trajectory: Trajectory, manip: PlanarMan
                 str(trajectory.adhesion_exceeded[i])
             )
             f.write(line + "\n")
-                
-    
+           
+    print(trajectory.base_tf)
+    print(manip)
     trajectory_metadata = json.dumps({
         "timestamp": time.time(),
         "base_tf": [[float(v) for v in row] for row in trajectory.base_tf.tolist()],
         "manipulator_parameters": {
             "num_links": manip.n,
-            "link_widths": manip.link_width,
-            "link_lengths": manip.link_lengths,
-            "joint_radius": manip.joint_radius,
-            "joint_limit_radians": manip.joint_limits.position
+            "link_widths": _value_to_json(manip.link_width),
+            "link_lengths": _value_to_json(manip.link_lengths),
+            "joint_radius": _value_to_json(manip.joint_radius),
+            "joint_limit_radians": _value_to_json(
+                manip.joint_limits.position
+            ),
         }
     }, indent=2)
     

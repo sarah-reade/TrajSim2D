@@ -206,7 +206,7 @@ class TestTrajectoryVisualisation(unittest.TestCase):
         while True:
             
             # Update visualisation
-            [arm_ids, done] = update_trajectory_visualisation(time.time() - start_time,self.canvas,self.arm,self.traj
+            [arm_ids, done,_] = update_trajectory_visualisation(time.time() - start_time,self.canvas,self.arm,self.traj
                                                             ,arm_ids,border=self.border,objs=self.concave_objs)
             if done:
                 break

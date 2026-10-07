@@ -23,15 +23,17 @@ from std_msgs.msg import String
 from tf2_msgs.msg import TFMessage
 from trajectory_msgs.msg import JointTrajectory
 
-from trajsim2d_core.file_parser import load_canvas_from_file, save_canvas_to_file
+from trajsim2d_core.file_parser import load_canvas_from_file, save_canvas_to_file, save_trajectory_to_file
 from trajsim2d_core.environment import (
     generate_random_border,
     generate_random_convex_objects,
 )
 from trajsim2d_core.twodmanip import PlanarManipulator
 from trajsim2d_core.geometry_canvas import GeometryCanvas
-from trajsim2d_core.visualisation import initialise_visualisation
+from trajsim2d_core.visualisation import initialise_visualisation, update_trajectory_visualisation
 from trajsim2d_ros.action import Simulation
+from trajsim2d_core.calculations import Trajectory, evaluate_trajectory_threaded,calculate_robot_state
+
 
 
 class TrajSim2DNode(Node):
@@ -57,6 +59,7 @@ class TrajSim2DNode(Node):
         self.declare_parameter("publish_rate", 30.0)
         self.declare_parameter("headless", False)
 
+        self.thread = None
         self.canvas = None
         self.frame_id = str(self.get_parameter("frame_id").value)
         self.base_frame = str(self.get_parameter("base_frame").value)
@@ -71,11 +74,12 @@ class TrajSim2DNode(Node):
         self.base_transform = np.eye(3)
         self.positions: Optional[np.ndarray] = None
         self.velocities: Optional[np.ndarray] = None
+        self.efforts: Optional[np.ndarray] = None
         self.start_config: Optional[np.ndarray] = None
         self.goal_config: Optional[np.ndarray] = None
         self.trajectory: Optional[List[Tuple[float, np.ndarray, np.ndarray]]] = None
         self.trajectory_start_time: Optional[float] = None
-        self.save_location: Optional[Path] = None
+        self.save_location: Optional[Path] = Path("/tmp")
         self.state = self.VACANT
         self._pending_goal: Optional[Simulation.Goal] = None
         self._pending_goal_error: Optional[str] = None
@@ -168,11 +172,22 @@ class TrajSim2DNode(Node):
                 return
             previous_time = point_time
             points.append((point_time, position, velocity))
+            
+        time = np.asarray([t for t, _, _ in points], dtype=float)
+        q = np.asarray([position for _, position, _ in points], dtype=float)
 
-        self.trajectory = points
-        self.trajectory_start_time = time.monotonic()
+        self.trajectory = Trajectory(
+            time=time,
+            q=q,
+            base_tf=self.base_transform,
+            attachment_end=1,
+        )
+        
         self.positions = points[0][1].copy()
         self.velocities = points[0][2].copy()
+        
+        self.thread = evaluate_trajectory_threaded(self.trajectory, self.manipulator, self.obstacles)
+        
         self.state = self.SIMULATING
 
     def _load_environment(self, filename: Path) -> None:
@@ -274,6 +289,7 @@ class TrajSim2DNode(Node):
             else np.zeros(self.manipulator.n, dtype=float)
         )
         self.velocities = np.zeros(self.manipulator.n, dtype=float)
+        self.efforts = np.zeros(self.manipulator.n, dtype=float)
         self.trajectory = None
         self.trajectory_start_time = None
 
@@ -326,6 +342,7 @@ class TrajSim2DNode(Node):
     def _main_loop(self) -> None:
         """Process one requested action and return to a passive state."""
         if self._pending_goal is None:
+            #print("BOOP: %s",self.state)
             # Visualise
             if self.state == self.SIMULATING:
                 self._advance_trajectory()
@@ -388,6 +405,7 @@ class TrajSim2DNode(Node):
         state.name = names
         state.position = self.positions.tolist()
         state.velocity = self.velocities.tolist()
+        state.effort = self.efforts.tolist()
         self.robot_state_pub.publish(state)
 
         fk_tfs = self.manipulator.forward_kinematics(
@@ -415,26 +433,35 @@ class TrajSim2DNode(Node):
             self.cost_map_pub.publish(self._cost_map_cache)
 
     def _advance_trajectory(self) -> None:
-        if self.trajectory is None or self.trajectory_start_time is None:
+        
+        if self.trajectory is None:
             self.state = self.IDLE
             return
+        
+        if self.trajectory_start_time is None:
+            self.arm_ids = [None]
+            self.trajectory_start_time = time.monotonic()
+            
+        
         elapsed = time.monotonic() - self.trajectory_start_time
-        if elapsed >= self.trajectory[-1][0]:
-            _, self.positions, self.velocities = self.trajectory[-1]
-            self.positions = self.positions.copy()
-            self.velocities = self.velocities.copy()
-            self.trajectory = None
-            self.trajectory_start_time = None
-            self.state = self.IDLE
-            return
-
-        for first, second in zip(self.trajectory, self.trajectory[1:]):
-            if elapsed <= second[0]:
-                duration = second[0] - first[0]
-                fraction = (elapsed - first[0]) / duration
-                self.positions = first[1] + fraction * (second[1] - first[1])
-                self.velocities = first[2] + fraction * (second[2] - first[2])
-                return
+        
+        [self.arm_ids, done, index] = update_trajectory_visualisation(elapsed,self.canvas,self.manipulator,self.trajectory,self.arm_ids,border=self.border,objs=self.obstacles)
+        
+        if done:
+            # check if calculation thread still running 
+            if self.thread.is_alive():
+                pass
+            else:
+                # save trajectory
+                foldername = self.save_location / time.strftime("%d_%m_%y_%H_%M_%S")
+                
+                save_trajectory_to_file(foldername=foldername,trajectory=self.trajectory,manip=self.manipulator)
+                self._reset_robot_state()
+                self.state = self.IDLE
+        else:
+            [self.positions,self.velocities,self.efforts] = calculate_robot_state(self.manipulator,self.trajectory,index)
+            
+        return
 
     def _transforms(self, tfs: Sequence[np.ndarray], stamp) -> List[TransformStamped]:
         transforms = []
