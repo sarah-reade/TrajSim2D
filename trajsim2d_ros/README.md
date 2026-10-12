@@ -11,6 +11,8 @@ This package exposes the core simulator as the `trajsim2d` node.
 - Publishes `sensor_msgs/msg/JointState` on `/robot_state`.
 - Publishes `sensor_msgs/msg/JointState` on `/goal_pose`. The message contains
   the goal joint configuration.
+- Publishes `geometry_msgs/msg/PoseStamped` on `/goal_ee_pose`. The message
+  contains the goal end-effector pose in the configured `frame_id`.
 - Publishes `nav_msgs/msg/OccupancyGrid` on `/cost_map`.
 - Publishes the current manipulator URDF as `std_msgs/msg/String` on
   `/robot_description` whenever an environment is loaded or generated. This

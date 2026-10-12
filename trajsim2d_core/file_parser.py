@@ -215,7 +215,6 @@ def save_trajectory_to_file(foldername, trajectory: Trajectory, manip: PlanarMan
         os.makedirs(foldername)
     
     foldername = str(foldername)
-    print("Saving file to: %s", foldername + "/trajectory.csv")
     with open(foldername + "/trajectory.csv", 'w') as f:
         # Write header
         header = ["time"] \
@@ -256,7 +255,6 @@ def save_trajectory_to_file(foldername, trajectory: Trajectory, manip: PlanarMan
             )
             f.write(line + "\n")
            
-    print(type(manip.link_width))
     trajectory_metadata = json.dumps({
         "timestamp": time.time(),
         "base_tf": [[float(v) for v in row] for row in trajectory.base_tf.tolist()],
