@@ -11,7 +11,7 @@ from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 import rclpy
-from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped
 from nav_msgs.msg import OccupancyGrid
 from rclpy.action import ActionServer, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -91,6 +91,9 @@ class TrajSim2DNode(Node):
 
         self.robot_state_pub = self.create_publisher(JointState, "robot_state", 10)
         self.goal_pose_pub = self.create_publisher(JointState, "goal_pose", 10)
+        self.goal_ee_pose_pub = self.create_publisher(
+            PoseStamped, "goal_ee_pose", 10
+        )
         self.cost_map_pub = self.create_publisher(OccupancyGrid, "cost_map", 1)
         description_qos = QoSProfile(
             depth=1,
@@ -428,6 +431,25 @@ class TrajSim2DNode(Node):
             else self.positions.tolist()
         )
         self.goal_pose_pub.publish(goal)
+        
+        goal_config = (
+            self.goal_config
+            if self.goal_config is not None
+            else self.positions
+        )
+        
+        goal_ee_tf = self.manipulator.forward_kinematics(
+            self.base_transform, goal_config
+        )[-1]
+        goal_ee_pose = PoseStamped()
+        goal_ee_pose.header.stamp = now
+        goal_ee_pose.header.frame_id = self.frame_id
+        goal_ee_pose.pose.position.x = float(goal_ee_tf[0, 2])
+        goal_ee_pose.pose.position.y = float(goal_ee_tf[1, 2])
+        goal_ee_pose.pose.orientation.z, goal_ee_pose.pose.orientation.w = (
+            self._yaw_quaternion(goal_ee_tf)
+        )
+        self.goal_ee_pose_pub.publish(goal_ee_pose)
 
         if self._cost_map_cache is not None:
             self.cost_map_pub.publish(self._cost_map_cache)
