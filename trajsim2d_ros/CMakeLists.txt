@@ -11,9 +11,11 @@ find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(tf2_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
+find_package(moveit_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/Simulation.action"
+  "action/MoveitRequest.action"
 )
 
 # rosidl generates the Python package directory with the same name as this

@@ -1,0 +1,7 @@
+# Planning options
+moveit_msgs/MotionPlanRequest request
+string foldername
+---
+bool result
+---
+string node_state
