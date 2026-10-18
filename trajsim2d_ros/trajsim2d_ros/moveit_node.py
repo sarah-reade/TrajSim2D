@@ -8,12 +8,18 @@ import tempfile
 import time
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
-
 import numpy as np
+import logging
+import shutil
+import xml.etree.ElementTree as ET
+from pathlib import Path
+import yaml
+
 import rclpy
-from geometry_msgs.msg import PoseStamped, TransformStamped
+from geometry_msgs.msg import Point, Pose, PoseStamped, TransformStamped
+from shape_msgs.msg import Mesh, MeshTriangle
 from nav_msgs.msg import OccupancyGrid
-from rclpy.action import ActionServer, GoalResponse
+from rclpy.action import ActionServer, GoalResponse, ActionClient
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
@@ -22,6 +28,13 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import String
 from tf2_msgs.msg import TFMessage
 from trajectory_msgs.msg import JointTrajectory
+
+from launch import LaunchDescription, LaunchService
+from launch_ros.actions import Node as LaunchNode
+
+from moveit_msgs.msg import PlanningScene, PlanningOptions, CollisionObject, MoveItErrorCodes
+from moveit_msgs.srv import ApplyPlanningScene
+from moveit_msgs.action import MoveGroup
 
 from trajsim2d_core.file_parser import load_canvas_from_file, save_canvas_to_file, save_trajectory_to_file
 from trajsim2d_core.environment import (
@@ -33,7 +46,6 @@ from trajsim2d_core.geometry_canvas import GeometryCanvas
 from trajsim2d_core.visualisation import initialise_visualisation, update_trajectory_visualisation
 from trajsim2d_ros.action import Simulation, MoveitRequest
 from trajsim2d_core.calculations import Trajectory, evaluate_trajectory_threaded,calculate_robot_state
-
 
 
 class TrajSim2DNode(Node):
@@ -62,17 +74,15 @@ class TrajSim2DNode(Node):
         self.declare_parameter("base_frame", "base_link")
         self.declare_parameter("resolution", 0.05)
         self.declare_parameter("publish_rate", 30.0)
-        self.declare_parameter("headless", False)
 
-        self.thread = None
         self.canvas = None
         self.frame_id = str(self.get_parameter("frame_id").value)
         self.base_frame = str(self.get_parameter("base_frame").value)
         self.resolution = float(self.get_parameter("resolution").value)
-        self.headless = bool(self.get_parameter("headless").value)
         if self.resolution <= 0.0:
             raise ValueError("resolution must be positive")
 
+        self._eval_thread: Optional[threading.Thread] = None
         self.manipulator: Optional[PlanarManipulator] = None
         self.border: Optional[np.ndarray] = None
         self.obstacles: List[np.ndarray] = []
@@ -86,7 +96,7 @@ class TrajSim2DNode(Node):
         self.trajectory_start_time: Optional[float] = None
         self.save_location: Optional[Path] = Path("/tmp")
         self.state = self.VACANT
-        self._pending_goal: Optional[Simulation.Goal] = None
+        self._pending_goal: Simulation.Goal | MoveitRequest.Goal | None = None
         self._pending_goal_error: Optional[str] = None
         self._goal_complete = threading.Event()
         self._callback_group_sim = ReentrantCallbackGroup()
@@ -94,6 +104,44 @@ class TrajSim2DNode(Node):
         self.visualisation_canvas: Optional[GeometryCanvas] = None
         self.visualisation_arm_ids: List[str] = []
         self._cost_map_cache: Optional[OccupancyGrid] = None
+        
+        self._moveit_config_dir = Path("/tmp/moveit_config")
+        self._moveit_thread: Optional[threading.Thread] = None
+        self._moveit_launch_service = None
+        self._moveit_stop_timeout = 10.0
+        self._moveit_launch_error = None
+        
+        # MoveIt interfaces
+        self._moveit_action_client = None
+        self._planning_scene_client = None
+
+        # Planning scene state
+        self._planning_scene = None
+        self._planning_scene_set = None
+        self._planning_scene_request_pending = False
+        self._planning_scene_future = None
+        self._planning_scene_error = None
+        self._moveit_scene_object_ids = set()
+
+        # MoveIt action state
+        self._moveit_goal_started = None
+        self._moveit_goal_complete = None
+        self._moveit_goal_feedback = None
+        self._moveit_goal_error = None
+        self._moveit_goal_handle = None
+        self._moveit_goal_request_pending = False
+        self._moveit_goal_future = None
+        self._moveit_result_future = None
+        self._moveit_result = None
+
+        # Collision geometry settings
+        self._moveit_planning_frame = "world"
+        self._moveit_scene_z_min = -0.05
+        self._moveit_scene_z_max = 0.05
+
+        # Cancellation state
+        self._moveit_cancel_future = None
+        self._moveit_cancel_requested = False
 
         self.robot_state_pub = self.create_publisher(JointState, "robot_state", 10)
         self.goal_pose_pub = self.create_publisher(JointState, "goal_pose", 10)
@@ -132,9 +180,9 @@ class TrajSim2DNode(Node):
         self.interrupt_timer_sim = self.create_timer(
             1.0 / rate, self._interrupt_loop_sim, callback_group=self._callback_group_sim
         )
-        self.interrupt_timer_mvit = self.create_timer(
-            1.0 / rate, self._interrupt_loop_mvit, callback_group=self._callback_group_mvit
-        )
+        # self.interrupt_timer_mvit = self.create_timer(
+        #     1.0 / rate, self._interrupt_loop_mvit, callback_group=self._callback_group_mvit
+        # )
 
     def _goal_callback_sim(self, _goal_request: Simulation.Goal) -> GoalResponse:
         if self._pending_goal is not None:
@@ -207,9 +255,9 @@ class TrajSim2DNode(Node):
         self.positions = points[0][1].copy()
         self.velocities = points[0][2].copy()
         
-        self.thread = evaluate_trajectory_threaded(self.trajectory, self.manipulator, self.obstacles)
+        self._eval_thread = evaluate_trajectory_threaded(self.trajectory, self.manipulator, self.obstacles)
         
-        self.state = self.SIMULATING
+        #self.state = self.SIMULATING
 
     def _load_environment(self, filename: Path) -> None:
         loaded = load_canvas_from_file(filename)
@@ -220,30 +268,30 @@ class TrajSim2DNode(Node):
         self.start_config = loaded.start_config
         self.goal_config = loaded.end_config
 
-        if not self.headless:
-            self._reset_visualisation()
-            (
-                self.canvas,
-                self.base_transform,
-                self.border_id,
-                self.object_ids,
-                self.arm_ids,
-                self.start_config,
-                self.goal_config,
-            ) = initialise_visualisation(
-                border=self.border,
-                objs=self.obstacles,
-                arm=self.manipulator,
-                base_transform=self.base_transform,
-                joint_config_1=self.start_config,
-                joint_config_2=self.goal_config,
-            )
+        self._reset_visualisation()
+        (
+            self.canvas,
+            self.base_transform,
+            self.border_id,
+            self.object_ids,
+            self.arm_ids,
+            self.start_config,
+            self.goal_config,
+        ) = initialise_visualisation(
+            border=self.border,
+            objs=self.obstacles,
+            arm=self.manipulator,
+            base_transform=self.base_transform,
+            joint_config_1=self.start_config,
+            joint_config_2=self.goal_config,
+        )
 
         self._reset_robot_state()
         self._cost_map_cache = self._create_cost_map(
             self.get_clock().now().to_msg()
         )
         self._publish_robot_description()
+        self._restart_moveit()
 
     def _generate_random_environment(self) -> None:
         border_size = 5.0
@@ -256,28 +304,29 @@ class TrajSim2DNode(Node):
         self.base_transform = np.eye(3)
         self.start_config = np.zeros(self.manipulator.n, dtype=float)
         self.goal_config = np.zeros(self.manipulator.n, dtype=float)
-        if not self.headless:
-            self._reset_visualisation()
-            (
-                self.canvas,
-                self.base_transform,
-                self.border_id,
-                self.object_ids,
-                self.arm_ids,
-                self.start_config,
-                self.goal_config,
-            ) = initialise_visualisation(
-                border=self.border,
-                objs=self.obstacles,
-                arm=self.manipulator,
-                attempt_max=20
-            )
+        
+        self._reset_visualisation()
+        (
+            self.canvas,
+            self.base_transform,
+            self.border_id,
+            self.object_ids,
+            self.arm_ids,
+            self.start_config,
+            self.goal_config,
+        ) = initialise_visualisation(
+            border=self.border,
+            objs=self.obstacles,
+            arm=self.manipulator,
+            attempt_max=20
+        )
 
         self._reset_robot_state()
         self._cost_map_cache = self._create_cost_map(
             self.get_clock().now().to_msg()
         )
         self._publish_robot_description()
+        self._restart_moveit()
 
     def _publish_robot_description(self) -> None:
         if self.manipulator is None:
@@ -289,17 +338,309 @@ class TrajSim2DNode(Node):
             ) as temporary_file:
                 temporary_path = Path(temporary_file.name)
             self.manipulator.save_to_urdf(str(temporary_path))
-            description = temporary_path.read_text(encoding="utf-8")
+            self.description = temporary_path.read_text(encoding="utf-8")
             message = String()
-            message.data = description
+            message.data = self.description
             self.robot_description_pub.publish(message)
         finally:
             if temporary_path is not None:
                 temporary_path.unlink(missing_ok=True)
 
-    def _reset_visualisation(self) -> None:
-        if self.headless:
+    def _restart_moveit(self) -> None:
+        self.get_logger().info("Restarting MoveIt")
+
+        # 1. Stop the old launch completely.
+        self._stop_moveit()
+
+        try:
+            # 2. Generate fresh configuration files.
+            config_dir = self._generate_moveit_config()
+
+            # 3. Launch MoveIt using the new configuration.
+            self._start_moveit(config_dir)
+
+        except Exception:
+            self.get_logger().exception(
+                "Failed to restart MoveIt"
+            )
+            raise
+        
+        self._initialise_moveit_interfaces()
+        
+    def _initialise_moveit_interfaces(self) -> None:
+        if self._planning_scene_client is None:
+            self._planning_scene_client = self.create_client(
+                ApplyPlanningScene,
+                "/apply_planning_scene",
+            )
+
+        if self._moveit_action_client is None:
+            self._moveit_action_client = ActionClient(
+                self,
+                MoveGroup,
+                "/move_action",
+            )
+        
+    def _generate_moveit_config(self) -> Path:
+        config_dir = Path("/tmp/moveit_config")
+
+        # Validate the robot description.
+        if not self.description:
+            raise ValueError("self.description must contain URDF XML")
+
+        urdf_root = ET.fromstring(self.description)
+
+        if urdf_root.tag != "robot":
+            raise ValueError("Robot description is not a valid URDF")
+
+        # The SRDF must define planning groups for MoveIt.
+        srdf = self.generate_srdf(self.description)
+
+        if not srdf:
+            raise ValueError(
+                "self.semantic_description must contain SRDF XML "
+                "with the robot's planning groups"
+            )
+
+        srdf_root = ET.fromstring(srdf)
+
+        if srdf_root.tag != "robot":
+            raise ValueError("Semantic description is not a valid SRDF")
+
+        if srdf_root.attrib.get("name") != urdf_root.attrib.get("name"):
+            raise ValueError("URDF and SRDF robot names do not match")
+
+        config_dir.mkdir(parents=True, exist_ok=True)
+
+        # Remove only files managed by this function.
+        for filename in (
+            "robot.urdf",
+            "robot.srdf",
+            "kinematics.yaml",
+            "ompl_planning.yaml",
+        ):
+            (config_dir / filename).unlink(missing_ok=True)
+
+        # Save the robot descriptions.
+        (config_dir / "robot.urdf").write_text(
+            self.description,
+            encoding="utf-8",
+        )
+
+        (config_dir / "robot.srdf").write_text(
+            srdf,
+            encoding="utf-8",
+        )
+
+        # Generic kinematics configuration.
+        # Add group-specific IK solvers here if required.
+        with (config_dir / "kinematics.yaml").open("w") as f:
+            yaml.safe_dump({}, f)
+
+        # Generic OMPL configuration.
+        ompl_config = {
+            "planning_plugin": "ompl_interface/OMPLPlanner",
+            "request_adapters": (
+                "default_planner_request_adapters/ResolveConstraintFrames "
+                "default_planner_request_adapters/ValidateWorkspaceBounds "
+                "default_planner_request_adapters/CheckStartStateBounds "
+                "default_planner_request_adapters/CheckStartStateCollision"
+            ),
+            "start_state_max_bounds_error": 0.1,
+            "planner_configs": {
+                "RRTConnectkConfigDefault": {
+                    "type": "geometric::RRTConnect",
+                    "range": 0.0,
+                },
+            },
+        }
+
+        with (config_dir / "ompl_planning.yaml").open("w") as f:
+            yaml.safe_dump(ompl_config, f, sort_keys=False)
+
+        self.get_logger().info(
+            f"Generated MoveIt configuration in {config_dir}"
+        )
+
+        return config_dir
+
+    def generate_srdf(self,urdf: str) -> str:
+        root = ET.fromstring(urdf)
+
+        links = {
+            link.attrib["name"]
+            for link in root.findall("link")
+        }
+
+        joints = root.findall("joint")
+
+        # Find the root link: a link that is never a joint's child.
+        child_links = {
+            joint.find("child").attrib["link"]
+            for joint in joints
+        }
+
+        roots = links - child_links
+
+        if len(roots) != 1:
+            raise ValueError(f"Expected one root link, got {roots}")
+
+        base_link = roots.pop()
+
+        # Follow the serial chain from the base.
+        current_link = base_link
+        chain_joints = []
+
+        while True:
+            children = [
+                joint for joint in joints
+                if joint.find("parent").attrib["link"] == current_link
+            ]
+
+            if not children:
+                break
+
+            if len(children) != 1:
+                raise ValueError(
+                    f"Expected a serial chain at {current_link}"
+                )
+
+            joint = children[0]
+            current_link = joint.find("child").attrib["link"]
+
+            if joint.attrib["type"] in ("revolute", "continuous", "prismatic"):
+                chain_joints.append(joint)
+
+        if not chain_joints:
+            raise ValueError("No movable joints found")
+
+        tip_link = current_link
+        robot_name = root.attrib["name"]
+
+        srdf = ET.Element("robot", {"name": robot_name})
+
+        group = ET.SubElement(srdf, "group", {"name": "manipulator"})
+        ET.SubElement(
+            group,
+            "chain",
+            {
+                "base_link": base_link,
+                "tip_link": tip_link,
+            },
+        )
+
+        return ET.tostring(srdf, encoding="unicode")
+        
+    def _stop_moveit(self) -> None:
+        service = self._moveit_launch_service
+        thread = self._moveit_thread
+
+        if service is None:
+            if thread is not None and thread.is_alive():
+                raise RuntimeError(
+                    "MoveIt thread is alive but its LaunchService is missing"
+                )
+            self._moveit_thread = None
             return
+
+        self.get_logger().info("Stopping MoveIt launch")
+
+        # Request shutdown of the launch service and its launched actions.
+        service.shutdown()
+
+        if thread is not None:
+            thread.join(timeout=self._moveit_stop_timeout)
+
+            if thread.is_alive():
+                raise RuntimeError(
+                    "MoveIt launch did not stop within the timeout; "
+                    "refusing to start another instance"
+                )
+
+        self._moveit_launch_service = None
+        self._moveit_thread = None
+
+        self.get_logger().info("MoveIt launch stopped")
+    
+    def _is_moveit_running(self) -> bool:
+        return (
+            self._moveit_thread is not None
+            and self._moveit_thread.is_alive()
+            and self._moveit_launch_error is None
+        )
+    
+    def _start_moveit(self, config_dir: Path) -> None:
+        if (
+            self._moveit_thread is not None
+            and self._moveit_thread.is_alive()
+        ):
+            raise RuntimeError("MoveIt launch is already running")
+
+        urdf = (config_dir / "robot.urdf").read_text(
+            encoding="utf-8"
+        )
+        srdf = (config_dir / "robot.srdf").read_text(
+            encoding="utf-8"
+        )
+
+        with (config_dir / "kinematics.yaml").open() as f:
+            kinematics = yaml.safe_load(f) or {}
+
+        with (config_dir / "ompl_planning.yaml").open() as f:
+            ompl = yaml.safe_load(f) or {}
+
+        # Configure the OMPL pipeline and the MoveIt node.
+        parameters = {
+            "robot_description": urdf,
+            "robot_description_semantic": srdf,
+            "robot_description_kinematics": kinematics,
+            "planning_pipelines": ["ompl"],
+            "default_planning_pipeline": "ompl",
+            "ompl": ompl,
+        }
+
+        move_group = LaunchNode(
+            package="moveit_ros_move_group",
+            executable="move_group",
+            name="move_group",
+            output="screen",
+            parameters=[parameters],
+        )
+
+        service = LaunchService()
+        service.include_launch_description(
+            LaunchDescription([move_group])
+        )
+
+        self._moveit_launch_error = None
+
+        def _run_launch():
+            try:
+                return_code = service.run()
+
+                if return_code != 0:
+                    self._moveit_launch_error = RuntimeError(
+                        f"MoveIt launch exited with code {return_code}"
+                    )
+
+            except Exception as exc:
+                self._moveit_launch_error = exc
+                logging.exception("MoveIt launch failed")
+
+        thread = threading.Thread(
+            target=_run_launch,
+            name="moveit-launch",
+            daemon=True,
+        )
+
+        self._moveit_launch_service = service
+        self._moveit_thread = thread
+
+        thread.start()
+
+        self.get_logger().info("MoveIt launch thread started")
+    
+    def _reset_visualisation(self) -> None:
         if self.canvas is not None:
             self.canvas.close()
 
@@ -315,8 +656,6 @@ class TrajSim2DNode(Node):
         self.trajectory_start_time = None
 
     def _refresh_visualisation(self) -> None:
-        if self.headless:
-            return
         if self.canvas is not None:
             self.canvas.refresh()
         return
@@ -361,7 +700,7 @@ class TrajSim2DNode(Node):
         return result
 
     def _execute_action_mvit(self, goal_handle: MoveitRequest.Goal) -> MoveitRequest.Result:
-        request = goal_handle.request
+        request = goal_handle
         self._pending_goal = request
         self._pending_goal_error = None
         self._goal_complete.clear()
@@ -391,43 +730,479 @@ class TrajSim2DNode(Node):
         while self._pending_goal is not None:
             if self._planning_scene is None:
                 self.state = self.GENERATING_PLANNING_SCENE
-                self._planning_scene = self._costmap_2_scene(self._cost_map_cache)
-            elif not self._planning_scene_set:
+                self._planning_scene = self._generate_planning_scene()
+            elif self._planning_scene_set is None:
                 self.state = self.SETTING_PLANNING_SCENE
-                self._planning_scene_set = self._set_planning_scene(self._planning_scene)
-            elif self._moveit_goal_started:
+                self._set_planning_scene(self._planning_scene)
+            elif self._moveit_goal_started is None:
                 self.state = self.INITIALISING_MOVEIT_GOAL
-                self._moveit_goal_started = self._start_moveit_goal(self._pending_goal)
-            elif not self._moveit_goal_complete:
-                self.state = "MOVEIT_" + self._moveit_goal_feedback
-            elif self._moveit_trajectory is not None:
-                self.state = self.CONVERTING_TRAJECTORY
-                self.trajectory = self._convert_trajectory(self._moveit_trajectory)
+                self._start_moveit_goal(self._pending_goal)
+            elif self._moveit_goal_complete is True:
+                if self._moveit_result is not None:
+                    self.state = self.CONVERTING_TRAJECTORY
+                    self.trajectory = self._convert_trajectory(
+                        self._moveit_result
+                    )
+                else:
+                    self._pending_goal = None
+                    if self._moveit_goal_error is not None:
+                        self._pending_goal_error = (
+                            "MOVEIT_ERROR_" + self._moveit_goal_error
+                        )
+                    else:
+                        self._pending_goal_error = (
+                            "UNKNOWN_ERROR_NO_TRAJECTORY"
+                        )
             elif self.trajectory is None:
-                self._pending_goal = False
+                self._pending_goal = None
                 if self._moveit_goal_error is not None:
                     self._pending_goal_error = "MOVEIT_ERROR_" + self._moveit_goal_error
                 else:
                     self._pending_goal_error = "UNKNOWN_ERROR_NO_TRAJECTORY"
             else:
-                self._pending_goal = False
+                self._pending_goal = None
+                self.state = self.SIMULATING
         
         
         if self._moveit_goal_started and not self._moveit_goal_complete:
             self._moveit_cancel_goal()
         self._planning_scene = None
-        self._planning_scene_set = False
-        self._moveit_goal_started = False
-        self._moveit_goal_complete = False
-        self._moveit_trajectory = None
+        self._planning_scene_set = None
+        self._moveit_goal_started = None
+        self._moveit_goal_complete = None
+        self._moveit_result = None
         self.trajectory = None
         
-        
-                
-    
-    def _costmap_2_scene(cost_map:OccupancyGrid)-> PlanningScene:
+    def _generate_planning_scene(self) -> PlanningScene:
+        scene_polygons = [
+            polygon
+            for polygon in [self.border, *self.obstacles]
+            if polygon is not None
+        ]
+
+        planning_scene = PlanningScene()
+        planning_scene.is_diff = True
+
+        current_ids = {
+            "border" if i == 0 else f"obstacle_{i - 1}"
+            for i, polygon in enumerate(scene_polygons)
+        }
+
+        # Remove objects that existed in the previous scene but no
+        # longer exist in the current simulator environment.
+        for object_id in self._moveit_scene_object_ids - current_ids:
+            collision = CollisionObject()
+            collision.id = object_id
+            collision.header.frame_id = self._moveit_planning_frame
+            collision.operation = CollisionObject.REMOVE
+
+            planning_scene.world.collision_objects.append(collision)
+
+        # Add or update current objects.
+        for i, polygon in enumerate(scene_polygons):
+            object_id = (
+                "border" if i == 0 else f"obstacle_{i - 1}"
+            )
+
+            planning_scene.world.collision_objects.append(
+                self._polygon_to_collision_object(
+                    polygon,
+                    object_id,
+                )
+            )
+
+        self._moveit_scene_object_ids = current_ids
+
         return planning_scene
     
+    def _polygon_to_collision_object(
+        self,
+        polygon: np.ndarray,
+        object_id: str,
+    ) -> CollisionObject:
+
+        polygon, cap_triangles = self._triangulate_polygon(polygon)
+
+        z_min = float(self._moveit_scene_z_min)
+        z_max = float(self._moveit_scene_z_max)
+
+        if z_max <= z_min:
+            raise ValueError("Scene z_max must be greater than z_min")
+
+        n = len(polygon)
+
+        mesh = Mesh()
+
+        # First N vertices are the bottom; next N are the top.
+        for z in (z_min, z_max):
+            for x, y in polygon:
+                mesh.vertices.append(
+                    Point(x=float(x), y=float(y), z=z)
+                )
+
+        # Bottom cap: reverse winding for outward-facing normals.
+        for a, b, c in cap_triangles:
+            triangle = MeshTriangle()
+            triangle.vertex_indices = [c, b, a]
+            mesh.triangles.append(triangle)
+
+        # Top cap.
+        for a, b, c in cap_triangles:
+            triangle = MeshTriangle()
+            triangle.vertex_indices = [a + n, b + n, c + n]
+            mesh.triangles.append(triangle)
+
+        # Side faces.
+        for i in range(n):
+            j = (i + 1) % n
+
+            bottom_i = i
+            bottom_j = j
+            top_i = i + n
+            top_j = j + n
+
+            for indices in (
+                (bottom_i, bottom_j, top_j),
+                (bottom_i, top_j, top_i),
+            ):
+                triangle = MeshTriangle()
+                triangle.vertex_indices = list(indices)
+                mesh.triangles.append(triangle)
+
+        collision = CollisionObject()
+        collision.id = object_id
+        collision.header.frame_id = self._moveit_planning_frame
+        collision.operation = CollisionObject.ADD
+
+        pose = Pose()
+        pose.orientation.w = 1.0
+
+        collision.meshes.append(mesh)
+        collision.mesh_poses.append(pose)
+
+        return collision
+    
+    def _triangulate_polygon(self, polygon: np.ndarray) -> list:
+        polygon = np.asarray(polygon, dtype=float)
+
+        if polygon.ndim != 2 or polygon.shape[1] != 2:
+            raise ValueError("Polygon must have shape (N, 2)")
+
+        if not np.all(np.isfinite(polygon)):
+            raise ValueError("Polygon contains non-finite coordinates")
+
+        # Remove a duplicated closing vertex.
+        if (
+            len(polygon) > 1
+            and np.allclose(polygon[0], polygon[-1])
+        ):
+            polygon = polygon[:-1]
+
+        if len(polygon) < 3:
+            raise ValueError("A polygon needs at least 3 vertices")
+
+        # Signed area: positive means counter-clockwise.
+        area = 0.5 * np.sum(
+            polygon[:, 0] * np.roll(polygon[:, 1], -1)
+            - polygon[:, 1] * np.roll(polygon[:, 0], -1)
+        )
+
+        if abs(area) < 1e-12:
+            raise ValueError("Polygon has zero area")
+
+        # Ear clipping assumes counter-clockwise winding.
+        if area < 0:
+            polygon = polygon[::-1].copy()
+
+        indices = list(range(len(polygon)))
+        triangles = []
+
+        def cross(a, b, c):
+            return (
+                (b[0] - a[0]) * (c[1] - a[1])
+                - (b[1] - a[1]) * (c[0] - a[0])
+            )
+
+        def inside_triangle(p, a, b, c):
+            eps = 1e-10
+            return (
+                cross(a, b, p) >= -eps
+                and cross(b, c, p) >= -eps
+                and cross(c, a, p) >= -eps
+            )
+
+        while len(indices) > 3:
+            found_ear = False
+
+            for i in range(len(indices)):
+                prev_idx = indices[i - 1]
+                curr_idx = indices[i]
+                next_idx = indices[(i + 1) % len(indices)]
+
+                a = polygon[prev_idx]
+                b = polygon[curr_idx]
+                c = polygon[next_idx]
+
+                if cross(a, b, c) <= 1e-10:
+                    continue
+
+                if any(
+                    inside_triangle(polygon[j], a, b, c)
+                    for j in indices
+                    if j not in (prev_idx, curr_idx, next_idx)
+                ):
+                    continue
+
+                triangles.append((prev_idx, curr_idx, next_idx))
+                indices.pop(i)
+                found_ear = True
+                break
+
+            if not found_ear:
+                raise ValueError(
+                    "Could not triangulate polygon; check for "
+                    "self-intersections or duplicate vertices"
+                )
+
+        triangles.append(tuple(indices))
+
+        return polygon, triangles
+    
+    def _set_planning_scene(
+        self,
+        planning_scene: PlanningScene,
+    ) -> None:
+        self._initialise_moveit_interfaces()
+
+        if self._planning_scene_request_pending:
+            return
+
+        if not self._planning_scene_client.service_is_ready():
+            if not self._planning_scene_client.wait_for_service(
+                timeout_sec=0.0
+            ):
+                # Retry on the next pass through the controller loop.
+                return
+
+        service_request = ApplyPlanningScene.Request()
+        service_request.scene = planning_scene
+
+        self._planning_scene_set = None
+        self._planning_scene_request_pending = True
+        self._planning_scene_error = None
+
+        try:
+            future = self._planning_scene_client.call_async(
+                service_request
+            )
+            self._planning_scene_future = future
+            future.add_done_callback(
+                self._planning_scene_response_callback
+            )
+
+        except Exception as exc:
+            self._planning_scene_request_pending = False
+            self._planning_scene_error = str(exc)
+            self._fail_moveit_request(
+                f"PLANNING_SCENE_REQUEST_FAILED: {exc}"
+            )
+    
+    def _planning_scene_response_callback(self, future) -> None:
+        self._planning_scene_request_pending = False
+
+        try:
+            response = future.result()
+
+            if response is not None and response.success:
+                self._planning_scene_set = True
+                self._planning_scene_error = None
+                self.get_logger().info(
+                    "MoveIt planning scene applied successfully"
+                )
+                return
+
+            self._planning_scene_error = (
+                "ApplyPlanningScene returned success=False"
+            )
+
+        except Exception as exc:
+            self._planning_scene_error = str(exc)
+
+        self._planning_scene_set = False
+
+        self._fail_moveit_request(
+            "PLANNING_SCENE_FAILED: "
+            + str(self._planning_scene_error)
+        )
+    
+    def _start_moveit_goal(self, request) -> None:
+        self._initialise_moveit_interfaces()
+
+        if self._moveit_goal_request_pending:
+            return
+
+        if self._moveit_goal_started is True:
+            return
+
+        if self._planning_scene_set is not True:
+            return
+
+        if not self._moveit_action_client.server_is_ready():
+            self._moveit_goal_started = False
+            self._moveit_goal_complete = True
+            self._moveit_goal_error = "ACTION_SERVER_UNAVAILABLE"
+            return
+
+        self.save_location = request.foldername
+
+        motion_plan_goal = MoveGroup.Goal()
+        motion_plan_goal.request = request.request
+
+        planning_options = PlanningOptions()
+        planning_options.plan_only = True
+        planning_options.look_around = False
+        planning_options.replan = False
+
+        # The scene has already been applied using ApplyPlanningScene.
+        planning_options.planning_scene_diff.is_diff = True
+
+        motion_plan_goal.planning_options = planning_options
+
+        self._moveit_goal_request_pending = True
+        self._moveit_goal_started = None
+        self._moveit_goal_complete = None
+        self._moveit_goal_feedback = None
+        self._moveit_goal_error = None
+        self._moveit_goal_handle = None
+        self._moveit_result = None
+
+        try:
+            future = self._moveit_action_client.send_goal_async(
+                motion_plan_goal,
+                feedback_callback=self._moveit_feedback_callback,
+            )
+
+            self._moveit_goal_future = future
+            future.add_done_callback(
+                self._moveit_goal_response_callback
+            )
+
+        except Exception as exc:
+            self._moveit_goal_request_pending = False
+            self._moveit_goal_started = False
+            self._moveit_goal_complete = True
+            self._moveit_goal_error = f"GOAL_SEND_FAILED: {exc}"
+    
+    def _moveit_goal_response_callback(self, future) -> None:
+        self._moveit_goal_request_pending = False
+
+        try:
+            goal_handle = future.result()
+        except Exception as exc:
+            self._moveit_goal_started = False
+            self._moveit_goal_complete = True
+            self._moveit_goal_error = f"GOAL_RESPONSE_FAILED: {exc}"
+            return
+
+        if not goal_handle.accepted:
+            self._moveit_goal_started = False
+            self._moveit_goal_complete = True
+            self._moveit_goal_error = "GOAL_REJECTED"
+            self.get_logger().warning("MoveIt rejected the goal")
+            return
+
+        self._moveit_goal_handle = goal_handle
+        self._moveit_goal_started = True
+
+        self._moveit_result_future = goal_handle.get_result_async()
+        self._moveit_result_future.add_done_callback(
+            self._moveit_result_callback
+        )
+
+        self.get_logger().info("MoveIt goal accepted")
+    
+    def _moveit_feedback_callback(self, feedback_msg) -> None:
+        self._moveit_goal_feedback = feedback_msg.feedback.state
+    
+    def _moveit_result_callback(self, future) -> None:
+        try:
+            wrapped_result = future.result()
+            result = wrapped_result.result
+
+            self._moveit_goal_complete = True
+
+            if (
+                result.error_code.val
+                != MoveItErrorCodes.SUCCESS
+            ):
+                self._moveit_goal_error = (
+                    f"PLANNING_FAILED_{result.error_code.val}"
+                )
+                self._moveit_result = None
+                return
+
+            self._moveit_result = result
+
+        except Exception as exc:
+            self._moveit_goal_complete = True
+            self._moveit_goal_error = f"RESULT_FAILED: {exc}"
+            self._moveit_result = None
+    
+    def _convert_trajectory(self,moveit_result:MoveGroup.Result) -> Trajectory:
+        moveit_trajectory = moveit_result.planned_trajectory.joint_trajectory
+        self._trajectory_callback(moveit_trajectory)
+        return 
+    
+    def _moveit_cancel_goal(self) -> None:
+        goal_handle = self._moveit_goal_handle
+
+        if goal_handle is None or not goal_handle.accepted:
+            return
+
+        if self._moveit_goal_complete is True:
+            return
+
+        if self._moveit_cancel_requested:
+            return
+
+        self._moveit_cancel_requested = True
+
+        try:
+            self._moveit_cancel_future = (
+                goal_handle.cancel_goal_async()
+            )
+            self._moveit_cancel_future.add_done_callback(
+                self._moveit_cancel_response_callback
+            )
+
+        except Exception:
+            self.get_logger().exception(
+                "Failed to request MoveIt goal cancellation"
+            )
+    
+    def _moveit_cancel_response_callback(self, future) -> None:
+        try:
+            response = future.result()
+
+            if response.goals_canceling:
+                self.get_logger().info(
+                    "MoveIt goal cancellation accepted"
+                )
+            else:
+                self.get_logger().warning(
+                    "MoveIt did not accept the cancellation request"
+                )
+
+        except Exception:
+            self.get_logger().exception(
+                "MoveIt cancellation response failed"
+            )
+    
+    def _fail_moveit_request(self, error: str) -> None:
+        self._pending_goal_error = "MOVEIT_ERROR_" + error
+
+        # False is a terminal sentinel in the controller loop below.
+        self._pending_goal = False
     
     def _main_loop(self) -> None:
         """Process one requested action and return to a passive state."""
@@ -440,32 +1215,34 @@ class TrajSim2DNode(Node):
             return
 
         request = self._pending_goal
-        self.state = self._goal_state(request.goal)
         try:
-            if isinstance(request, MoveitRequest.Goal.Request):
+            if isinstance(request, MoveitRequest.Goal):
                 self._get_moveit_trajectory()
-            elif request.goal == Simulation.Goal.GET_CURRENT_STATE:
-                pass
-            elif request.goal == Simulation.Goal.GENERATE_RANDOM_ENVIRONMENT:
-                self._generate_random_environment()
-            elif request.goal == Simulation.Goal.LOAD_ENVIRONMENT_FROM_FILE:
-                if not request.data:
-                    raise ValueError("environment filename cannot be empty")
-                self._load_environment(Path(request.data))
-            elif request.goal == Simulation.Goal.SET_TRAJECTORY_PROCESSING_SAVE_LOCATION:
-                if not request.data:
-                    raise ValueError("save location cannot be empty")
-                self.save_location = Path(request.data)
-            elif request.goal == Simulation.Goal.SAVE_ENVIRONMENT:
-                filename = (
-                    Path(request.data) if request.data else self.save_location
-                )
-                if filename is None:
-                    raise ValueError("no save location has been configured")
-                self._save_environment(filename)
-                self.save_location = filename
             else:
-                raise ValueError(f"unknown action goal {request.goal}")
+                self.state = self._goal_state(request.goal)
+            
+                if request.goal == Simulation.Goal.GET_CURRENT_STATE:
+                    pass
+                elif request.goal == Simulation.Goal.GENERATE_RANDOM_ENVIRONMENT:
+                    self._generate_random_environment()
+                elif request.goal == Simulation.Goal.LOAD_ENVIRONMENT_FROM_FILE:
+                    if not request.data:
+                        raise ValueError("environment filename cannot be empty")
+                    self._load_environment(Path(request.data))
+                elif request.goal == Simulation.Goal.SET_TRAJECTORY_PROCESSING_SAVE_LOCATION:
+                    if not request.data:
+                        raise ValueError("save location cannot be empty")
+                    self.save_location = Path(request.data)
+                elif request.goal == Simulation.Goal.SAVE_ENVIRONMENT:
+                    filename = (
+                        Path(request.data) if request.data else self.save_location
+                    )
+                    if filename is None:
+                        raise ValueError("no save location has been configured")
+                    self._save_environment(filename)
+                    self.save_location = filename
+                else:
+                    raise ValueError(f"unknown action goal {request.goal}")
         except (OSError, ValueError, RuntimeError) as error:
             self._pending_goal_error = str(error)
         finally:
@@ -560,7 +1337,7 @@ class TrajSim2DNode(Node):
         
         if done:
             # check if calculation thread still running 
-            if self.thread.is_alive():
+            if self._eval_thread.is_alive():
                 pass
             else:
                 # save trajectory
