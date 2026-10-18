@@ -29,8 +29,6 @@ from std_msgs.msg import String
 from tf2_msgs.msg import TFMessage
 from trajectory_msgs.msg import JointTrajectory
 
-from launch import LaunchDescription, LaunchService
-from launch_ros.actions import Node as LaunchNode
 
 from moveit_msgs.msg import PlanningScene, PlanningOptions, CollisionObject, MoveItErrorCodes
 from moveit_msgs.srv import ApplyPlanningScene
@@ -44,8 +42,9 @@ from trajsim2d_core.environment import (
 from trajsim2d_core.twodmanip import PlanarManipulator
 from trajsim2d_core.geometry_canvas import GeometryCanvas
 from trajsim2d_core.visualisation import initialise_visualisation, update_trajectory_visualisation
-from trajsim2d_ros.action import Simulation, MoveitRequest
 from trajsim2d_core.calculations import Trajectory, evaluate_trajectory_threaded,calculate_robot_state
+from trajsim2d_ros.action import Simulation, MoveitRequest
+from trajsim2d_ros.srv import RestartMoveit
 
 
 class TrajSim2DNode(Node):
@@ -142,6 +141,11 @@ class TrajSim2DNode(Node):
         # Cancellation state
         self._moveit_cancel_future = None
         self._moveit_cancel_requested = False
+        
+        self._relaunch_moveit_client = self.create_client(
+            RestartMoveit,
+            "restart_moveit",
+        )
 
         self.robot_state_pub = self.create_publisher(JointState, "robot_state", 10)
         self.goal_pose_pub = self.create_publisher(JointState, "goal_pose", 10)
@@ -349,23 +353,24 @@ class TrajSim2DNode(Node):
     def _restart_moveit(self) -> None:
         self.get_logger().info("Restarting MoveIt")
 
-        # 1. Stop the old launch completely.
-        self._stop_moveit()
+        config_dir = self._generate_moveit_config()
+
+        if not self._relaunch_moveit_client.wait_for_service(timeout_sec=5.0):
+            self._pending_goal_error = "MoveIt restart service is unavailable"
+
+        request = RestartMoveit.Request()
+        request.foldername = str(config_dir)
 
         try:
-            # 2. Generate fresh configuration files.
-            config_dir = self._generate_moveit_config()
+            response = self._relaunch_moveit_client.call(request)
 
-            # 3. Launch MoveIt using the new configuration.
-            self._start_moveit(config_dir)
+            if response is None or not response.result:
+                self._pending_goal_error = "MoveIt restart failed"
+
+            self._initialise_moveit_interfaces()
 
         except Exception:
-            self.get_logger().exception(
-                "Failed to restart MoveIt"
-            )
-            raise
-        
-        self._initialise_moveit_interfaces()
+            self._pending_goal_error = "Failed to restart MoveIt"
         
     def _initialise_moveit_interfaces(self) -> None:
         if self._planning_scene_client is None:
@@ -434,24 +439,40 @@ class TrajSim2DNode(Node):
 
         # Generic kinematics configuration.
         # Add group-specific IK solvers here if required.
+        kinematics = {
+            "manipulator": {
+                "kinematics_solver": "kdl_kinematics_plugin/KDLKinematicsPlugin",
+                "kinematics_solver_search_resolution": "0.005",
+                "kinematics_solver_timeout": "0.05"}}
+        
         with (config_dir / "kinematics.yaml").open("w") as f:
-            yaml.safe_dump({}, f)
+            yaml.safe_dump(kinematics, f,sort_keys=False)
 
         # Generic OMPL configuration.
         ompl_config = {
             "planning_plugin": "ompl_interface/OMPLPlanner",
+
             "request_adapters": (
                 "default_planner_request_adapters/ResolveConstraintFrames "
-                "default_planner_request_adapters/ValidateWorkspaceBounds "
-                "default_planner_request_adapters/CheckStartStateBounds "
-                "default_planner_request_adapters/CheckStartStateCollision"
+                "default_planner_request_adapters/FixWorkspaceBounds "
+                "default_planner_request_adapters/FixStartStateBounds "
+                "default_planner_request_adapters/FixStartStateCollision "
+                "default_planner_request_adapters/FixStartStatePathConstraints"
             ),
+
             "start_state_max_bounds_error": 0.1,
+
             "planner_configs": {
                 "RRTConnectkConfigDefault": {
                     "type": "geometric::RRTConnect",
                     "range": 0.0,
                 },
+            },
+
+            "manipulator": {
+                "planner_configs": [
+                    "RRTConnectkConfigDefault",
+                ],
             },
         }
 
@@ -530,115 +551,6 @@ class TrajSim2DNode(Node):
         )
 
         return ET.tostring(srdf, encoding="unicode")
-        
-    def _stop_moveit(self) -> None:
-        service = self._moveit_launch_service
-        thread = self._moveit_thread
-
-        if service is None:
-            if thread is not None and thread.is_alive():
-                raise RuntimeError(
-                    "MoveIt thread is alive but its LaunchService is missing"
-                )
-            self._moveit_thread = None
-            return
-
-        self.get_logger().info("Stopping MoveIt launch")
-
-        # Request shutdown of the launch service and its launched actions.
-        service.shutdown()
-
-        if thread is not None:
-            thread.join(timeout=self._moveit_stop_timeout)
-
-            if thread.is_alive():
-                raise RuntimeError(
-                    "MoveIt launch did not stop within the timeout; "
-                    "refusing to start another instance"
-                )
-
-        self._moveit_launch_service = None
-        self._moveit_thread = None
-
-        self.get_logger().info("MoveIt launch stopped")
-    
-    def _is_moveit_running(self) -> bool:
-        return (
-            self._moveit_thread is not None
-            and self._moveit_thread.is_alive()
-            and self._moveit_launch_error is None
-        )
-    
-    def _start_moveit(self, config_dir: Path) -> None:
-        if (
-            self._moveit_thread is not None
-            and self._moveit_thread.is_alive()
-        ):
-            raise RuntimeError("MoveIt launch is already running")
-
-        urdf = (config_dir / "robot.urdf").read_text(
-            encoding="utf-8"
-        )
-        srdf = (config_dir / "robot.srdf").read_text(
-            encoding="utf-8"
-        )
-
-        with (config_dir / "kinematics.yaml").open() as f:
-            kinematics = yaml.safe_load(f) or {}
-
-        with (config_dir / "ompl_planning.yaml").open() as f:
-            ompl = yaml.safe_load(f) or {}
-
-        # Configure the OMPL pipeline and the MoveIt node.
-        parameters = {
-            "robot_description": urdf,
-            "robot_description_semantic": srdf,
-            "robot_description_kinematics": kinematics,
-            "planning_pipelines": ["ompl"],
-            "default_planning_pipeline": "ompl",
-            "ompl": ompl,
-        }
-
-        move_group = LaunchNode(
-            package="moveit_ros_move_group",
-            executable="move_group",
-            name="move_group",
-            output="screen",
-            parameters=[parameters],
-        )
-
-        service = LaunchService()
-        service.include_launch_description(
-            LaunchDescription([move_group])
-        )
-
-        self._moveit_launch_error = None
-
-        def _run_launch():
-            try:
-                return_code = service.run()
-
-                if return_code != 0:
-                    self._moveit_launch_error = RuntimeError(
-                        f"MoveIt launch exited with code {return_code}"
-                    )
-
-            except Exception as exc:
-                self._moveit_launch_error = exc
-                logging.exception("MoveIt launch failed")
-
-        thread = threading.Thread(
-            target=_run_launch,
-            name="moveit-launch",
-            daemon=True,
-        )
-
-        self._moveit_launch_service = service
-        self._moveit_thread = thread
-
-        thread.start()
-
-        self.get_logger().info("MoveIt launch thread started")
     
     def _reset_visualisation(self) -> None:
         if self.canvas is not None:

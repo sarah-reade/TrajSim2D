@@ -16,6 +16,7 @@ find_package(moveit_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/Simulation.action"
   "action/MoveitRequest.action"
+  "srv/RestartMoveit.srv"
   DEPENDENCIES moveit_msgs
 )
 
@@ -23,12 +24,14 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 # package. Install the node module into that directory instead of invoking
 # ament_python_install_package, whose package-name filter would exclude it.
 install(FILES
+  ${PROJECT_NAME}/moveit_launch.py
   ${PROJECT_NAME}/moveit_node.py
   ${PROJECT_NAME}/node.py
   ${PROJECT_NAME}/direct_trajectory_test_node.py
   DESTINATION ${PYTHON_INSTALL_DIR}/${PROJECT_NAME}
 )
 install(PROGRAMS
+  scripts/moveit_launch_node
   scripts/trajsim2d_moveit_node
   scripts/trajsim2d_node
   scripts/direct_trajectory_test_node
