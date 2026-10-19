@@ -1,198 +1,115 @@
-"""Run MoveIt and restart it with configuration files from a requested folder."""
+"""Run MoveIt on the first restart service call and restart it on later calls."""
 
 import threading
-from time import sleep
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 import rclpy
 import yaml
-
-from rclpy.node import Node
-from rclpy.executors import SingleThreadedExecutor
-
 from launch import LaunchDescription, LaunchService
 from launch_ros.actions import Node as LaunchNode
+from rclpy.executors import SingleThreadedExecutor
+from rclpy.node import Node
 
 from trajsim2d_ros.srv import RestartMoveit
 
 
-# =========================
-# 2. Request data structure
-# =========================
-
 @dataclass
 class RestartRequest:
-    """State shared between a restart service callback and the launch loop."""
-
     folder: Path
     completed: threading.Event
     result: bool = False
 
 
-# =========================
-# 3. Server initialization
-# =========================
-
 class MoveitLaunchServer(Node):
-    """Expose a ROS service for replacing the running MoveIt launch."""
+    """Expose a service to start or replace the MoveIt launch."""
 
     def __init__(self) -> None:
         super().__init__("moveit_launch_server")
-
-        self._moveit_config_dir = None
-
         self._moveit_launch_service: Optional[LaunchService] = None
-
         self._pending_restart: Optional[RestartRequest] = None
-
+        self._restart_event = threading.Event()
         self._lock = threading.Lock()
-
         self._restart_service = self.create_service(
-            RestartMoveit,
-            "restart_moveit",
-            self._handle_restart,
+            RestartMoveit, "restart_moveit", self._handle_restart
         )
-
         self.get_logger().info(
-            "MoveIt launch server initialized"
+            "MoveIt launch server initialized; MoveIt will start on the first service call"
         )
-
-    # =========================
-    # 4. Service callback
-    # =========================
 
     def _handle_restart(self, request, response):
-        """Validate a requested configuration and coordinate a restart.
-
-        The service callback runs in the executor thread, while the
-        ``LaunchService`` runs in the main thread.  Shutting down the current
-        launch wakes the main-thread loop; the event prevents this callback
-        from returning before the replacement launch has been prepared.
-        """
-        _moveit_config_dir = Path(request.foldername).expanduser()
-
-        self.get_logger().info(
-            f"Received MoveIt restart request: {_moveit_config_dir}"
-        )
+        config_dir = Path(request.foldername).expanduser().resolve()
+        self.get_logger().info(f"Received MoveIt restart request: {config_dir}")
 
         try:
-            self._validate_config_dir(_moveit_config_dir)
-
+            self._validate_config_dir(config_dir)
         except Exception:
             self.get_logger().exception(
-                f"Invalid MoveIt configuration directory: {_moveit_config_dir}"
+                f"Invalid MoveIt configuration directory: {config_dir}"
             )
             response.result = False
             return response
 
-        restart = RestartRequest(
-            folder=_moveit_config_dir,
-            completed=threading.Event(),
-        )
-        
-        self._moveit_config_dir = _moveit_config_dir
-
-        # Accept only one restart request at a time.
+        restart = RestartRequest(folder=config_dir, completed=threading.Event())
         with self._lock:
-            
             if self._pending_restart is not None:
-                self.get_logger().warning(
-                    "A MoveIt restart is already pending"
-                )
+                self.get_logger().warning("A MoveIt restart is already pending")
                 response.result = False
                 return response
 
-            if self._moveit_launch_service is None:
-                self.get_logger().info(
-                    "MoveIt launch service is not running yet"
-                )
-                response.result = True
-                return response
-
             self._pending_restart = restart
+            active_launch = self._moveit_launch_service
+            self._restart_event.set()
 
+        # On subsequent calls, interrupt the currently running LaunchService.
+        # On the first call active_launch is None, so the main loop wakes and starts it.
+        if active_launch is not None:
+            active_launch.shutdown()
 
-        # Wait until the main thread has prepared the replacement launch.
-        # This confirms preparation only; it does not mean MoveIt is ready.
-        restart.completed.wait()
+        # The response reports whether the replacement launch was constructed,
+        # not whether move_group has finished initializing.
+        while rclpy.ok() and not restart.completed.wait(timeout=0.1):
+            pass
         response.result = restart.result
-
         return response
-
-    # =========================
-    # 5. Validate configuration
-    # =========================
 
     @staticmethod
     def _validate_config_dir(config_dir: Path) -> None:
-        """Ensure all files required to build the MoveIt parameters exist."""
         required_files = (
             "robot.urdf",
             "robot.srdf",
             "kinematics.yaml",
             "ompl_planning.yaml",
         )
-
         if not config_dir.is_dir():
-            raise FileNotFoundError(
-                f"Configuration directory does not exist: {config_dir}"
-            )
-
+            raise FileNotFoundError(f"Configuration directory does not exist: {config_dir}")
         for filename in required_files:
             path = config_dir / filename
-
             if not path.is_file():
-                raise FileNotFoundError(
-                    f"Required configuration file is missing: {path}"
-                )
+                raise FileNotFoundError(f"Required configuration file is missing: {path}")
 
-    # =========================
-    # 6. Create MoveIt launch
-    # =========================
-
-    def _create_moveit_launch(
-        self,
-        config_dir: Path,
-    ) -> LaunchService:
-        """Build a LaunchService containing one configured ``move_group`` node."""
-
+    def _create_moveit_launch(self, config_dir: Path) -> LaunchService:
         self._validate_config_dir(config_dir)
-
-        urdf = (
-            config_dir / "robot.urdf"
-        ).read_text(encoding="utf-8")
-
-        srdf = (
-            config_dir / "robot.srdf"
-        ).read_text(encoding="utf-8")
-
-        with (config_dir / "kinematics.yaml").open(
-            encoding="utf-8"
-        ) as f:
+        urdf = (config_dir / "robot.urdf").read_text(encoding="utf-8")
+        srdf = (config_dir / "robot.srdf").read_text(encoding="utf-8")
+        with (config_dir / "kinematics.yaml").open(encoding="utf-8") as f:
             kinematics = yaml.safe_load(f) or {}
-
-        with (config_dir / "ompl_planning.yaml").open(
-            encoding="utf-8"
-        ) as f:
+        with (config_dir / "ompl_planning.yaml").open(encoding="utf-8") as f:
             ompl = yaml.safe_load(f) or {}
 
         parameters = {
-            # These values are passed directly to move_group as ROS parameters.
             "robot_description": urdf,
             "robot_description_semantic": srdf,
             "robot_description_kinematics": kinematics,
             "planning_pipelines": ["ompl"],
             "default_planning_pipeline": "ompl",
             "ompl": ompl,
-            # Trajectory execution is disabled because this node is used for
-            # planning/simulation rather than commanding physical hardware.
             "allow_trajectory_execution": False,
-            # Use MoveIt's in-process fake controller for simulation.
-            "moveit_controller_manager": "moveit_fake_controller_manager/MoveItFakeControllerManager"
+            "moveit_controller_manager": (
+                "moveit_fake_controller_manager/MoveItFakeControllerManager"
+            ),
         }
-        
         move_group = LaunchNode(
             package="moveit_ros_move_group",
             executable="move_group",
@@ -200,160 +117,92 @@ class MoveitLaunchServer(Node):
             output="screen",
             parameters=[parameters],
         )
-
         launch_service = LaunchService()
-
-        launch_service.include_launch_description(
-            LaunchDescription([move_group])
-        )
-
+        launch_service.include_launch_description(LaunchDescription([move_group]))
         return launch_service
 
-    # =========================
-    # 7. Main-thread launch loop
-    # =========================
-
     def run_moveit(self) -> None:
-        """
-        Run this function in the main thread.
-
-        LaunchService.run() blocks until the launch is shut down.
-        Restart requests are processed after the current launch exits.
-        """
-
-        request_to_complete = None
-
+        """Run in the main thread; remain idle until the first service request."""
         while rclpy.ok():
-            
-            if self._moveit_config_dir is None:
-                sleep(0.1)
-                continue
-            
-            config_dir = self._moveit_config_dir 
-            
-            try:
-                self.get_logger().info(
-                    f"Launching MoveIt using: {config_dir}"
-                )
-
-                launch_service = self._create_moveit_launch(
-                    config_dir
-                )
-
-            except Exception:
-                self.get_logger().exception(
-                    "Failed to configure MoveIt launch"
-                )
-
-                if request_to_complete is not None:
-                    request_to_complete.result = False
-                    request_to_complete.completed.set()
-                    request_to_complete = None
-
+            self._restart_event.wait(timeout=0.1)
+            if not rclpy.ok():
                 break
 
             with self._lock:
-                self._moveit_launch_service = launch_service
+                restart = self._pending_restart
+                if restart is None:
+                    self._restart_event.clear()
+                    continue
+                self._pending_restart = None
+                self._restart_event.clear()
 
-            # The replacement launch has been constructed.
-            # The service response indicates launch preparation,
-            # not yet that MoveIt is fully ready.
-            if request_to_complete is not None:
-                request_to_complete.result = True
-                request_to_complete.completed.set()
-                request_to_complete = None
-
+            launch_service = None
             try:
-                # This runs in the main thread.
+                self.get_logger().info(f"Launching MoveIt using: {restart.folder}")
+                launch_service = self._create_moveit_launch(restart.folder)
+                with self._lock:
+                    self._moveit_launch_service = launch_service
+                    # A newer request may have arrived while the launch was built.
+                    pending_arrived = self._pending_restart is not None
+                restart.result = True
+                restart.completed.set()
+
+                if pending_arrived:
+                    launch_service.shutdown()
                 return_code = launch_service.run()
-
-                self.get_logger().info(
-                    f"MoveIt launch exited with code {return_code}"
-                )
-
+                self.get_logger().info(f"MoveIt launch exited with code {return_code}")
             except Exception:
-                self.get_logger().exception(
-                    "MoveIt launch execution failed"
-                )
-
+                self.get_logger().exception("Failed to configure or run MoveIt launch")
+                restart.result = False
+                restart.completed.set()
             finally:
                 with self._lock:
                     if self._moveit_launch_service is launch_service:
                         self._moveit_launch_service = None
 
-            # Check whether shutdown was requested by the service.
+            # If a service request caused the launch to stop, the next iteration
+            # consumes that queued request and starts the replacement.
             with self._lock:
-                request_to_complete = self._pending_restart
-                self._pending_restart = None
-
-            if request_to_complete is None:
-                # No restart request: the launch exited unexpectedly
-                # or the application is shutting down.
-                break
-
-            # The next iteration constructs a new launch using
-            # the requested folder.
-            config_dir = request_to_complete.folder
-
-            self.get_logger().info(
-                f"Restarting MoveIt with: {config_dir}"
-            )
-
-    # =========================
-    # 8. Cleanup
-    # =========================
+                has_pending = self._pending_restart is not None
+                if not has_pending:
+                    self._restart_event.clear()
+            if not has_pending:
+                # An unexpected MoveIt exit should leave the service available;
+                # it will launch again only when another request arrives.
+                continue
 
     def shutdown_moveit(self) -> None:
-        """Stop MoveIt and unblock any service callback waiting on a restart."""
         with self._lock:
             launch_service = self._moveit_launch_service
+            pending = self._pending_restart
+            self._pending_restart = None
+            self._restart_event.set()
 
-            if launch_service is not None:
-                launch_service.shutdown()
+        if launch_service is not None:
+            launch_service.shutdown()
+        if pending is not None:
+            pending.result = False
+            pending.completed.set()
 
-            if self._pending_restart is not None:
-                # A shutdown must not leave the service callback blocked
-                # indefinitely waiting for the launch loop.
-                self._pending_restart.result = False
-                self._pending_restart.completed.set()
-                self._pending_restart = None
-
-
-# =========================
-# 9. Main
-# =========================
 
 def main(args=None) -> None:
     rclpy.init(args=args)
-
     node = MoveitLaunchServer()
-
     executor = SingleThreadedExecutor()
     executor.add_node(node)
-
-    # ROS service callbacks run in this background thread.
     executor_thread = threading.Thread(
-        target=executor.spin,
-        name="moveit-service-executor",
-        daemon=True,
+        target=executor.spin, name="moveit-service-executor", daemon=True
     )
     executor_thread.start()
-
     try:
-        # LaunchService.run() executes in the main thread.
         node.run_moveit()
-
     except KeyboardInterrupt:
         pass
-
     finally:
         node.shutdown_moveit()
-
         executor.shutdown()
         executor_thread.join()
-
         node.destroy_node()
-
         if rclpy.ok():
             rclpy.shutdown()
 

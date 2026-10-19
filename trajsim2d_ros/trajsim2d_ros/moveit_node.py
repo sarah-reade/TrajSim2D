@@ -14,6 +14,7 @@ import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
 import yaml
+from collections.abc import Mapping
 
 import rclpy
 from geometry_msgs.msg import Point, Pose, PoseStamped, TransformStamped
@@ -24,13 +25,15 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.node import Node
+from rclpy.time import Time
 from sensor_msgs.msg import JointState
 from std_msgs.msg import String
 from tf2_msgs.msg import TFMessage
 from trajectory_msgs.msg import JointTrajectory
+from rosidl_runtime_py.convert import message_to_ordereddict
 
 
-from moveit_msgs.msg import PlanningScene, PlanningOptions, CollisionObject, MoveItErrorCodes
+from moveit_msgs.msg import PlanningScene, PlanningOptions, CollisionObject, MoveItErrorCodes, MotionPlanRequest, Constraints, TrajectoryConstraints, JointConstraint, RobotState
 from moveit_msgs.srv import ApplyPlanningScene
 from moveit_msgs.action import MoveGroup
 
@@ -73,6 +76,7 @@ class TrajSim2DNode(Node):
         self.declare_parameter("base_frame", "base_link")
         self.declare_parameter("resolution", 0.05)
         self.declare_parameter("publish_rate", 30.0)
+        self.declare_parameter("goal_tolerance", 0.1)
 
         self.canvas = None
         self.frame_id = str(self.get_parameter("frame_id").value)
@@ -80,6 +84,9 @@ class TrajSim2DNode(Node):
         self.resolution = float(self.get_parameter("resolution").value)
         if self.resolution <= 0.0:
             raise ValueError("resolution must be positive")
+        self.goal_tolerance = float(self.get_parameter("goal_tolerance").value)
+        if self.goal_tolerance <= 0.0:
+            raise ValueError("goal tolerance must be positive")
 
         self._eval_thread: Optional[threading.Thread] = None
         self.manipulator: Optional[PlanarManipulator] = None
@@ -178,15 +185,13 @@ class TrajSim2DNode(Node):
             goal_callback=self._goal_callback_mvit,
             callback_group=self._callback_group_mvit,
         )
+        
         rate = float(self.get_parameter("publish_rate").value)
         if rate <= 0.0:
             raise ValueError("publish_rate must be positive")
         self.interrupt_timer_sim = self.create_timer(
             1.0 / rate, self._interrupt_loop_sim, callback_group=self._callback_group_sim
         )
-        # self.interrupt_timer_mvit = self.create_timer(
-        #     1.0 / rate, self._interrupt_loop_mvit, callback_group=self._callback_group_mvit
-        # )
 
     def _goal_callback_sim(self, _goal_request: Simulation.Goal) -> GoalResponse:
         if self._pending_goal is not None:
@@ -612,7 +617,7 @@ class TrajSim2DNode(Node):
         return result
 
     def _execute_action_mvit(self, goal_handle: MoveitRequest.Goal) -> MoveitRequest.Result:
-        request = goal_handle
+        request = goal_handle.request
         self._pending_goal = request
         self._pending_goal_error = None
         self._goal_complete.clear()
@@ -794,89 +799,46 @@ class TrajSim2DNode(Node):
 
         return collision
     
-    def _triangulate_polygon(self, polygon: np.ndarray) -> list:
+    def _triangulate_polygon(self, polygon: np.ndarray) -> tuple:
         polygon = np.asarray(polygon, dtype=float)
-
+        
         if polygon.ndim != 2 or polygon.shape[1] != 2:
-            raise ValueError("Polygon must have shape (N, 2)")
+            self.get_logger().warn("Polygon must have shape (N, 2)")
 
         if not np.all(np.isfinite(polygon)):
-            raise ValueError("Polygon contains non-finite coordinates")
+            self.get_logger().warn("Polygon contains non-finite coordinates")
 
-        # Remove a duplicated closing vertex.
-        if (
-            len(polygon) > 1
-            and np.allclose(polygon[0], polygon[-1])
-        ):
+        # Remove duplicated closing vertex
+        if len(polygon) > 1 and np.allclose(polygon[0], polygon[-1]):
             polygon = polygon[:-1]
 
-        if len(polygon) < 3:
-            raise ValueError("A polygon needs at least 3 vertices")
+        # Remove consecutive duplicate vertices
+        if len(polygon) > 1:
+            keep = np.ones(len(polygon), dtype=bool)
+            keep[1:] = np.linalg.norm(np.diff(polygon, axis=0), axis=1) > 1e-10
+            polygon = polygon[keep]
 
-        # Signed area: positive means counter-clockwise.
+        if len(polygon) < 3:
+            self.get_logger().warn("Polygon needs at least 3 distinct vertices")
+
+        # Signed area
         area = 0.5 * np.sum(
             polygon[:, 0] * np.roll(polygon[:, 1], -1)
             - polygon[:, 1] * np.roll(polygon[:, 0], -1)
         )
 
         if abs(area) < 1e-12:
-            raise ValueError("Polygon has zero area")
+            self.get_logger().warn("Polygon has zero area")
 
-        # Ear clipping assumes counter-clockwise winding.
+        # Ensure counter-clockwise winding
         if area < 0:
             polygon = polygon[::-1].copy()
 
-        indices = list(range(len(polygon)))
-        triangles = []
-
-        def cross(a, b, c):
-            return (
-                (b[0] - a[0]) * (c[1] - a[1])
-                - (b[1] - a[1]) * (c[0] - a[0])
-            )
-
-        def inside_triangle(p, a, b, c):
-            eps = 1e-10
-            return (
-                cross(a, b, p) >= -eps
-                and cross(b, c, p) >= -eps
-                and cross(c, a, p) >= -eps
-            )
-
-        while len(indices) > 3:
-            found_ear = False
-
-            for i in range(len(indices)):
-                prev_idx = indices[i - 1]
-                curr_idx = indices[i]
-                next_idx = indices[(i + 1) % len(indices)]
-
-                a = polygon[prev_idx]
-                b = polygon[curr_idx]
-                c = polygon[next_idx]
-
-                if cross(a, b, c) <= 1e-10:
-                    continue
-
-                if any(
-                    inside_triangle(polygon[j], a, b, c)
-                    for j in indices
-                    if j not in (prev_idx, curr_idx, next_idx)
-                ):
-                    continue
-
-                triangles.append((prev_idx, curr_idx, next_idx))
-                indices.pop(i)
-                found_ear = True
-                break
-
-            if not found_ear:
-                raise ValueError(
-                    "Could not triangulate polygon; check for "
-                    "self-intersections or duplicate vertices"
-                )
-
-        triangles.append(tuple(indices))
+        # Fan triangulation: convex polygons only
+        triangles = [
+            (0, i, i + 1)
+            for i in range(1, len(polygon) - 1)
+        ]
 
         return polygon, triangles
     
@@ -947,9 +909,10 @@ class TrajSim2DNode(Node):
             + str(self._planning_scene_error)
         )
     
-    def _start_moveit_goal(self, request) -> None:
+    def _start_moveit_goal(self, request:MoveitRequest.Goal) -> None:
         self._initialise_moveit_interfaces()
 
+        
         if self._moveit_goal_request_pending:
             return
 
@@ -966,17 +929,55 @@ class TrajSim2DNode(Node):
             return
 
         self.save_location = request.foldername
+        self.foldername = Path(self.save_location) / Path(time.strftime("%d_%m_%y_%H_%M_%S"))
 
         motion_plan_goal = MoveGroup.Goal()
-        motion_plan_goal.request = request.request
+        
+        motion_plan_request = MotionPlanRequest()
+        
+        
+        # variable planner inputs
+        motion_plan_request.pipeline_id = request.request.pipeline_id
+        motion_plan_request.planner_id = request.request.planner_id
+        motion_plan_request.num_planning_attempts = request.request.num_planning_attempts
+        motion_plan_request.allowed_planning_time = request.request.allowed_planning_time
+        
+        # default settings
+        # path_constraints = Constraints()
+        # motion_plan_request.path_constraints = path_constraints
+        # trajectory_constraints = TrajectoryConstraints()
+        # motion_plan_request.trajectory_constraints = trajectory_constraints
+        # motion_plan_request.max_velocity_scaling_factor = 1
+        # motion_plan_request.max_acceleration_scaling_factor = 1
+        # motion_plan_request.workspace_parameters = WorkspaceParameters # from moveit_msgs.msg import WorkspaceParameters
+        
+        # set planner inputs
+        joint_state = self._get_robot_state_msg()
+        robot_state = RobotState()
+        robot_state.joint_state = joint_state
+        motion_plan_request.start_state = robot_state
+        
+        if not request.request.goal_constraints:
+            goal_tolerance = self.goal_tolerance
+        else:
+            goal_tolerance = request.request.goal_constraints[0].joint_constraints[0].tolerance_above
+            
+        motion_plan_request.goal_constraints = self._generate_goal_constraints(joint_state.name,goal_tolerance)
+        motion_plan_request.group_name = "manipulator"
+        
+        motion_plan_goal.request = motion_plan_request
 
         planning_options = PlanningOptions()
-        planning_options.plan_only = True
-        planning_options.look_around = False
-        planning_options.replan = False
-
         # The scene has already been applied using ApplyPlanningScene.
         planning_options.planning_scene_diff.is_diff = True
+        planning_options.plan_only = True
+        planning_options.look_around = False
+        #planning_options.look_around_attempts = 0
+        #planning_options.max_safe_execution_cost = 0.0
+        planning_options.replan = False
+        #planning_options.replan_attempts = 1
+        #planning_options.replan_delay = 0.0
+
 
         motion_plan_goal.planning_options = planning_options
 
@@ -987,6 +988,7 @@ class TrajSim2DNode(Node):
         self._moveit_goal_error = None
         self._moveit_goal_handle = None
         self._moveit_result = None
+        self._moveit_request = motion_plan_goal.request
 
         try:
             future = self._moveit_action_client.send_goal_async(
@@ -1004,6 +1006,40 @@ class TrajSim2DNode(Node):
             self._moveit_goal_started = False
             self._moveit_goal_complete = True
             self._moveit_goal_error = f"GOAL_SEND_FAILED: {exc}"
+    
+    def _generate_goal_constraints(self, names: list[str], tolerance:float) -> list[Constraints]:
+        
+        goal_constraints = []
+        goal_constraint = Constraints()
+        joint_constraints = []
+        
+        for joint_name,position in zip(names,self.goal_config):
+            joint_constraint = JointConstraint()
+            joint_constraint.joint_name = joint_name
+            joint_constraint.position = position
+            joint_constraint.tolerance_above = tolerance
+            joint_constraint.tolerance_below = tolerance
+            joint_constraints.append(joint_constraint)
+            
+        goal_constraint.joint_constraints = joint_constraints
+        
+        ## Empty 
+        # position_constraints = []
+        # position_constraint = PositionConstraint() # from moveit_msgs.msg import
+        # position_constraints.append(position_constraint)
+        # goal_constraint.position_constraints = position_constraints
+        # orientation_constraints = []
+        # orientation_constraint = OrientationConstraint() # from moveit_msgs.msg import
+        # orientation_constraints.append(orientation_constraint)
+        # goal_constraint.orientation_constraints = orientation_constraints
+        # visibility_constraints = []
+        # visibility_constraint = VisibilityConstraint() # from moveit_msgs.msg import
+        # visibility_constraints.append(visibility_constraint)
+        # goal_constraint.visibility_constraints = visibility_constraints
+        
+        goal_constraints.append(goal_constraint)
+        
+        return goal_constraints
     
     def _moveit_goal_response_callback(self, future) -> None:
         self._moveit_goal_request_pending = False
@@ -1042,6 +1078,8 @@ class TrajSim2DNode(Node):
             result = wrapped_result.result
 
             self._moveit_goal_complete = True
+            self.save_moveit_performance_to_file(self.foldername,result,self._moveit_request)
+            self._moveit_request = None
 
             if (
                 result.error_code.val
@@ -1056,6 +1094,7 @@ class TrajSim2DNode(Node):
             self._moveit_result = result
 
         except Exception as exc:
+            self.get_logger().warn(f"ERROR PROCESSING MOVEIT RESULT: {exc}")
             self._moveit_goal_complete = True
             self._moveit_goal_error = f"RESULT_FAILED: {exc}"
             self._moveit_result = None
@@ -1128,6 +1167,7 @@ class TrajSim2DNode(Node):
 
         request = self._pending_goal
         try:
+            
             if isinstance(request, MoveitRequest.Goal):
                 self._get_moveit_trajectory()
             else:
@@ -1174,12 +1214,13 @@ class TrajSim2DNode(Node):
         }
         return states.get(goal, self.VACANT)
 
-    def _interrupt_loop_sim(self) -> None:
-        """Advance simulation and publish ROS/visualisation outputs."""
-        if (self.state is not self.IDLE and self.state is not self.SIMULATING) or self.manipulator is None or self.positions is None or self.velocities is None:
-            return
-        now = self.get_clock().now().to_msg()
-        names = [f"joint_{index + 1}" for index in range(self.manipulator.n)]
+    def _get_robot_state_msg(self,now:Time = None,names: list = None) -> JointState:
+        
+        if now is None:
+            now = self.get_clock().now().to_msg()
+        if names is None:
+            names = [f"joint_{index + 1}" for index in range(self.manipulator.n)]
+        
         state = JointState()
         state.header.stamp = now
         state.header.frame_id = self.frame_id
@@ -1187,6 +1228,15 @@ class TrajSim2DNode(Node):
         state.position = self.positions.tolist()
         state.velocity = self.velocities.tolist()
         state.effort = self.efforts.tolist()
+        return state
+                
+    def _interrupt_loop_sim(self) -> None:
+        """Advance simulation and publish ROS/visualisation outputs."""
+        if (self.state is not self.IDLE and self.state is not self.SIMULATING) or self.manipulator is None or self.positions is None or self.velocities is None:
+            return
+        now = self.get_clock().now().to_msg()
+        names = [f"joint_{index + 1}" for index in range(self.manipulator.n)]
+        state = self._get_robot_state_msg(now,names)
         self.robot_state_pub.publish(state)
 
         fk_tfs = self.manipulator.forward_kinematics(
@@ -1253,9 +1303,7 @@ class TrajSim2DNode(Node):
                 pass
             else:
                 # save trajectory
-                foldername = self.save_location / time.strftime("%d_%m_%y_%H_%M_%S")
-                
-                save_trajectory_to_file(foldername=foldername,trajectory=self.trajectory,manip=self.manipulator)
+                save_trajectory_to_file(foldername=self.foldername,trajectory=self.trajectory,manip=self.manipulator)
                 self._reset_robot_state()
                 self.state = self.IDLE
         else:
@@ -1263,6 +1311,63 @@ class TrajSim2DNode(Node):
             
         return
 
+    def save_moveit_performance_to_file(
+        self,
+        foldername: Path,
+        moveit_result: MoveGroup.Result,
+        moveit_planner: MotionPlanRequest
+    ) -> None:
+        
+        foldername.mkdir(parents=True, exist_ok=True)
+
+        performance_data = {
+            "timestamp": time.strftime("%d_%m_%y_%H_%M_%S"),
+            "result": {
+                "success": moveit_result.error_code.val == 1,
+                "error_code": moveit_result.error_code.val,
+                "planning_time": moveit_result.planning_time,
+            },
+            "metadata": {
+                "pipeline_id": moveit_planner.pipeline_id,
+                "planner_id": moveit_planner.planner_id,
+                "group_name": moveit_planner.group_name,
+                "allowed_planning_time": moveit_planner.allowed_planning_time,
+                "num_planning_attempts": moveit_planner.num_planning_attempts,
+                "goal_constraints": [
+                    message_to_ordereddict(constraint)
+                    for constraint in moveit_planner.goal_constraints
+                ],
+                "trajectory_constraints": message_to_ordereddict(
+                    moveit_planner.trajectory_constraints
+                ),
+            },
+        }
+
+        filename = foldername / "moveit_performance.yaml"
+
+        performance_data = self._to_plain_data(performance_data)
+        
+        with filename.open("w", encoding="utf-8") as file:
+            yaml.safe_dump(
+                performance_data,
+                file,
+                sort_keys=False,
+                allow_unicode=True,
+            )
+
+    def _to_plain_data(self,value):
+        """Recursively convert mappings and sequences to YAML-safe Python types."""
+        if isinstance(value, Mapping):
+            return {
+                key: self._to_plain_data(item)
+                for key, item in value.items()
+            }
+
+        if isinstance(value, (list, tuple)):
+            return [self._to_plain_data(item) for item in value]
+
+        return value
+    
     def _transforms(self, tfs: Sequence[np.ndarray], stamp) -> List[TransformStamped]:
         transforms = []
         parent_tf = np.eye(3)
