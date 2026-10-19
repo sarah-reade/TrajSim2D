@@ -365,12 +365,12 @@ class TrajSim2DNode(Node):
             response = self._relaunch_moveit_client.call(request)
 
             if response is None or not response.result:
-                self._pending_goal_error = "MoveIt restart failed"
+                self._pending_goal_error = f"MoveIt restart failed with: {response}"
 
             self._initialise_moveit_interfaces()
 
-        except Exception:
-            self._pending_goal_error = "Failed to restart MoveIt"
+        except Exception as e:
+            self._pending_goal_error = f"Failed to restart MoveIt: {e}"
         
     def _initialise_moveit_interfaces(self) -> None:
         if self._planning_scene_client is None:

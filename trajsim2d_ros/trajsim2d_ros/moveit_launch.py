@@ -1,4 +1,4 @@
-"A ROS2 launch service, which launches moveit based on a folder name. "
+"""Run MoveIt and restart it with configuration files from a requested folder."""
 
 import threading
 from time import sleep
@@ -24,6 +24,8 @@ from trajsim2d_ros.srv import RestartMoveit
 
 @dataclass
 class RestartRequest:
+    """State shared between a restart service callback and the launch loop."""
+
     folder: Path
     completed: threading.Event
     result: bool = False
@@ -34,6 +36,7 @@ class RestartRequest:
 # =========================
 
 class MoveitLaunchServer(Node):
+    """Expose a ROS service for replacing the running MoveIt launch."""
 
     def __init__(self) -> None:
         super().__init__("moveit_launch_server")
@@ -61,6 +64,13 @@ class MoveitLaunchServer(Node):
     # =========================
 
     def _handle_restart(self, request, response):
+        """Validate a requested configuration and coordinate a restart.
+
+        The service callback runs in the executor thread, while the
+        ``LaunchService`` runs in the main thread.  Shutting down the current
+        launch wakes the main-thread loop; the event prevents this callback
+        from returning before the replacement launch has been prepared.
+        """
         _moveit_config_dir = Path(request.foldername).expanduser()
 
         self.get_logger().info(
@@ -87,8 +97,6 @@ class MoveitLaunchServer(Node):
         # Accept only one restart request at a time.
         with self._lock:
             
-            print("-------------------- RESTARTING MOVEIT --------------------")
-            
             if self._pending_restart is not None:
                 self.get_logger().warning(
                     "A MoveIt restart is already pending"
@@ -97,21 +105,18 @@ class MoveitLaunchServer(Node):
                 return response
 
             if self._moveit_launch_service is None:
-                self.get_logger().error(
-                    "MoveIt launch service is not running"
+                self.get_logger().info(
+                    "MoveIt launch service is not running yet"
                 )
-                response.result = False
+                response.result = True
                 return response
 
             self._pending_restart = restart
 
-            # Ask the main thread's launch loop to return.
-            self._moveit_launch_service.shutdown()
 
-        # Wait until the main thread prepares the replacement launch.
+        # Wait until the main thread has prepared the replacement launch.
+        # This confirms preparation only; it does not mean MoveIt is ready.
         restart.completed.wait()
-
-        
         response.result = restart.result
 
         return response
@@ -122,6 +127,7 @@ class MoveitLaunchServer(Node):
 
     @staticmethod
     def _validate_config_dir(config_dir: Path) -> None:
+        """Ensure all files required to build the MoveIt parameters exist."""
         required_files = (
             "robot.urdf",
             "robot.srdf",
@@ -150,6 +156,7 @@ class MoveitLaunchServer(Node):
         self,
         config_dir: Path,
     ) -> LaunchService:
+        """Build a LaunchService containing one configured ``move_group`` node."""
 
         self._validate_config_dir(config_dir)
 
@@ -172,13 +179,17 @@ class MoveitLaunchServer(Node):
             ompl = yaml.safe_load(f) or {}
 
         parameters = {
+            # These values are passed directly to move_group as ROS parameters.
             "robot_description": urdf,
             "robot_description_semantic": srdf,
             "robot_description_kinematics": kinematics,
             "planning_pipelines": ["ompl"],
             "default_planning_pipeline": "ompl",
             "ompl": ompl,
+            # Trajectory execution is disabled because this node is used for
+            # planning/simulation rather than commanding physical hardware.
             "allow_trajectory_execution": False,
+            # Use MoveIt's in-process fake controller for simulation.
             "moveit_controller_manager": "moveit_fake_controller_manager/MoveItFakeControllerManager"
         }
         
@@ -293,6 +304,7 @@ class MoveitLaunchServer(Node):
     # =========================
 
     def shutdown_moveit(self) -> None:
+        """Stop MoveIt and unblock any service callback waiting on a restart."""
         with self._lock:
             launch_service = self._moveit_launch_service
 
@@ -300,6 +312,8 @@ class MoveitLaunchServer(Node):
                 launch_service.shutdown()
 
             if self._pending_restart is not None:
+                # A shutdown must not leave the service callback blocked
+                # indefinitely waiting for the launch loop.
                 self._pending_restart.result = False
                 self._pending_restart.completed.set()
                 self._pending_restart = None
