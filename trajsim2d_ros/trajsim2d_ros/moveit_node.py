@@ -76,7 +76,7 @@ class TrajSim2DNode(Node):
         self.declare_parameter("base_frame", "base_link")
         self.declare_parameter("resolution", 0.05)
         self.declare_parameter("publish_rate", 30.0)
-        self.declare_parameter("goal_tolerance", 0.1)
+        self.declare_parameter("goal_tolerance", 0.01)
 
         self.canvas = None
         self.frame_id = str(self.get_parameter("frame_id").value)
@@ -98,7 +98,7 @@ class TrajSim2DNode(Node):
         self.efforts: Optional[np.ndarray] = None
         self.start_config: Optional[np.ndarray] = None
         self.goal_config: Optional[np.ndarray] = None
-        self.trajectory: Optional[List[Tuple[float, np.ndarray, np.ndarray]]] = None
+        self.trajectory: Optional[Trajectory] = None
         self.trajectory_start_time: Optional[float] = None
         self.save_location: Optional[Path] = Path("/tmp")
         self.state = self.VACANT
@@ -204,14 +204,37 @@ class TrajSim2DNode(Node):
             if self.state is self.VACANT:
                 return GoalResponse.REJECT
             return GoalResponse.ACCEPT
+        
+    def _joint_trajectory_info(self, jt: JointTrajectory) -> str:
+        """Return a readable summary of a JointTrajectory."""
+        lines = [
+            "JointTrajectory:",
+            f"  Joint names: {list(jt.joint_names)}",
+            f"  Number of points: {len(jt.points)}",
+        ]
+
+        for i, point in enumerate(jt.points):
+            duration = (
+                point.time_from_start.sec
+                + point.time_from_start.nanosec * 1e-9
+            )
+
+            lines.append(f"  Point {i}:")
+            lines.append(f"    Time from start: {duration:.3f} s")
+            lines.append(f"    Positions: {list(point.positions)}")
+            lines.append(f"    Velocities: {list(point.velocities)}")
+            lines.append(f"    Accelerations: {list(point.accelerations)}")
+            lines.append(f"    Effort: {list(point.effort)}")
+
+        return "\n".join(lines)
 
     def _trajectory_callback(self, message: JointTrajectory) -> None:
+        self.get_logger().debug(self._joint_trajectory_info(message))
+        
         if self.manipulator is None:
             self.get_logger().warning("Ignoring trajectory: no environment is loaded")
             return
-        if self._pending_goal is not None:
-            self.get_logger().warning("Ignoring trajectory while an action is running")
-            return
+        
         expected = [f"joint_{index + 1}" for index in range(self.manipulator.n)]
         names = list(message.joint_names)
         if names != expected:
@@ -230,12 +253,12 @@ class TrajSim2DNode(Node):
             velocity = np.asarray(point.velocities, dtype=float)
             if position.size != self.manipulator.n:
                 self.get_logger().error(
-                    "Each JointTrajectory point must contain every joint position"
+                    "Each JointTrajectory point must contain every joint position. Joint Trajectory:" + self._joint_trajectory_info(message)
                 )
                 return
             if velocity.size not in (0, self.manipulator.n):
                 self.get_logger().error(
-                    "JointTrajectory velocities must be empty or contain every joint"
+                    "JointTrajectory velocities must be empty or contain every joint. Joint Trajectory:" + self._joint_trajectory_info(message)
                 )
                 return
             if velocity.size == 0:
@@ -245,7 +268,7 @@ class TrajSim2DNode(Node):
             )
             if point_time <= previous_time:
                 self.get_logger().error(
-                    "JointTrajectory point times must be strictly increasing"
+                    "JointTrajectory point times must be strictly increasing. Joint Trajectory:" + self._joint_trajectory_info(message)
                 )
                 return
             previous_time = point_time
@@ -254,17 +277,21 @@ class TrajSim2DNode(Node):
         time = np.asarray([t for t, _, _ in points], dtype=float)
         q = np.asarray([position for _, position, _ in points], dtype=float)
 
-        self.trajectory = Trajectory(
-            time=time,
-            q=q,
-            base_tf=self.base_transform,
-            attachment_end=1,
-        )
-        
+        try:
+            self.trajectory = Trajectory(
+                time=time,
+                q=q,
+                base_tf=self.base_transform,
+                attachment_end=1,
+            )
+        except Exception as ex:
+            self.get_logger().info(f"JointTrajectory generation failed: {ex}")
+            
         self.positions = points[0][1].copy()
         self.velocities = points[0][2].copy()
         
         self._eval_thread = evaluate_trajectory_threaded(self.trajectory, self.manipulator, self.obstacles)
+        
         
         #self.state = self.SIMULATING
 
@@ -458,6 +485,7 @@ class TrajSim2DNode(Node):
             "planning_plugin": "ompl_interface/OMPLPlanner",
 
             "request_adapters": (
+                "default_planner_request_adapters/AddTimeOptimalParameterization "
                 "default_planner_request_adapters/ResolveConstraintFrames "
                 "default_planner_request_adapters/FixWorkspaceBounds "
                 "default_planner_request_adapters/FixStartStateBounds "
@@ -569,7 +597,6 @@ class TrajSim2DNode(Node):
         )
         self.velocities = np.zeros(self.manipulator.n, dtype=float)
         self.efforts = np.zeros(self.manipulator.n, dtype=float)
-        self.trajectory = None
         self.trajectory_start_time = None
 
     def _refresh_visualisation(self) -> None:
@@ -654,14 +681,18 @@ class TrajSim2DNode(Node):
             elif self._moveit_goal_started is None:
                 self.state = self.INITIALISING_MOVEIT_GOAL
                 self._start_moveit_goal(self._pending_goal)
+            elif self._moveit_goal_complete is None:
+                if self._moveit_goal_feedback is not None:
+                    self.state = "MOVEIT_" + self._moveit_goal_feedback
             elif self._moveit_goal_complete is True:
                 if self._moveit_result is not None:
                     self.state = self.CONVERTING_TRAJECTORY
                     self.trajectory = self._convert_trajectory(
                         self._moveit_result
                     )
+                    self.state = self.SIMULATING
+                    self.get_logger().info(self.trajectory)
                 else:
-                    self._pending_goal = None
                     if self._moveit_goal_error is not None:
                         self._pending_goal_error = (
                             "MOVEIT_ERROR_" + self._moveit_goal_error
@@ -670,15 +701,11 @@ class TrajSim2DNode(Node):
                         self._pending_goal_error = (
                             "UNKNOWN_ERROR_NO_TRAJECTORY"
                         )
-            elif self.trajectory is None:
+                    self.state = self.IDLE
+                    
                 self._pending_goal = None
-                if self._moveit_goal_error is not None:
-                    self._pending_goal_error = "MOVEIT_ERROR_" + self._moveit_goal_error
-                else:
-                    self._pending_goal_error = "UNKNOWN_ERROR_NO_TRAJECTORY"
             else:
                 self._pending_goal = None
-                self.state = self.SIMULATING
         
         
         if self._moveit_goal_started and not self._moveit_goal_complete:
@@ -688,7 +715,6 @@ class TrajSim2DNode(Node):
         self._moveit_goal_started = None
         self._moveit_goal_complete = None
         self._moveit_result = None
-        self.trajectory = None
         
     def _generate_planning_scene(self) -> PlanningScene:
         scene_polygons = [
@@ -909,6 +935,13 @@ class TrajSim2DNode(Node):
             + str(self._planning_scene_error)
         )
     
+    def _print_move_group_goal(self,msg:MoveGroup.Goal) -> None:
+        """Print the MoveGroup goal details."""
+        self.get_logger().info("MoveGroup Goal:")
+
+        self.get_logger().info(f"Request: {msg.request}")
+        self.get_logger().info(f"Planning options: {msg.planning_options}")
+    
     def _start_moveit_goal(self, request:MoveitRequest.Goal) -> None:
         self._initialise_moveit_interfaces()
 
@@ -920,9 +953,11 @@ class TrajSim2DNode(Node):
             return
 
         if self._planning_scene_set is not True:
+            self.get_logger().warn(f"PLANNING SCENE NOT SET")
             return
 
         if not self._moveit_action_client.server_is_ready():
+            self.get_logger().warn(f"MOVEIT ACTION SERVER UNAVAILABLE")
             self._moveit_goal_started = False
             self._moveit_goal_complete = True
             self._moveit_goal_error = "ACTION_SERVER_UNAVAILABLE"
@@ -931,66 +966,68 @@ class TrajSim2DNode(Node):
         self.save_location = request.foldername
         self.foldername = Path(self.save_location) / Path(time.strftime("%d_%m_%y_%H_%M_%S"))
 
-        motion_plan_goal = MoveGroup.Goal()
-        
-        motion_plan_request = MotionPlanRequest()
-        
-        
-        # variable planner inputs
-        motion_plan_request.pipeline_id = request.request.pipeline_id
-        motion_plan_request.planner_id = request.request.planner_id
-        motion_plan_request.num_planning_attempts = request.request.num_planning_attempts
-        motion_plan_request.allowed_planning_time = request.request.allowed_planning_time
-        
-        # default settings
-        # path_constraints = Constraints()
-        # motion_plan_request.path_constraints = path_constraints
-        # trajectory_constraints = TrajectoryConstraints()
-        # motion_plan_request.trajectory_constraints = trajectory_constraints
-        # motion_plan_request.max_velocity_scaling_factor = 1
-        # motion_plan_request.max_acceleration_scaling_factor = 1
-        # motion_plan_request.workspace_parameters = WorkspaceParameters # from moveit_msgs.msg import WorkspaceParameters
-        
-        # set planner inputs
-        joint_state = self._get_robot_state_msg()
-        robot_state = RobotState()
-        robot_state.joint_state = joint_state
-        motion_plan_request.start_state = robot_state
-        
-        if not request.request.goal_constraints:
-            goal_tolerance = self.goal_tolerance
-        else:
-            goal_tolerance = request.request.goal_constraints[0].joint_constraints[0].tolerance_above
-            
-        motion_plan_request.goal_constraints = self._generate_goal_constraints(joint_state.name,goal_tolerance)
-        motion_plan_request.group_name = "manipulator"
-        
-        motion_plan_goal.request = motion_plan_request
-
-        planning_options = PlanningOptions()
-        # The scene has already been applied using ApplyPlanningScene.
-        planning_options.planning_scene_diff.is_diff = True
-        planning_options.plan_only = True
-        planning_options.look_around = False
-        #planning_options.look_around_attempts = 0
-        #planning_options.max_safe_execution_cost = 0.0
-        planning_options.replan = False
-        #planning_options.replan_attempts = 1
-        #planning_options.replan_delay = 0.0
-
-
-        motion_plan_goal.planning_options = planning_options
-
-        self._moveit_goal_request_pending = True
-        self._moveit_goal_started = None
-        self._moveit_goal_complete = None
-        self._moveit_goal_feedback = None
-        self._moveit_goal_error = None
-        self._moveit_goal_handle = None
-        self._moveit_result = None
-        self._moveit_request = motion_plan_goal.request
-
         try:
+            motion_plan_goal = MoveGroup.Goal()
+            
+            motion_plan_request = MotionPlanRequest()
+            
+            
+            # variable planner inputs
+            motion_plan_request.pipeline_id = request.request.pipeline_id
+            motion_plan_request.planner_id = request.request.planner_id
+            motion_plan_request.num_planning_attempts = request.request.num_planning_attempts
+            motion_plan_request.allowed_planning_time = request.request.allowed_planning_time
+            
+            # default settings
+            # path_constraints = Constraints()
+            # motion_plan_request.path_constraints = path_constraints
+            # trajectory_constraints = TrajectoryConstraints()
+            # motion_plan_request.trajectory_constraints = trajectory_constraints
+            motion_plan_request.max_velocity_scaling_factor = 1.0
+            motion_plan_request.max_acceleration_scaling_factor = 1.0
+            # motion_plan_request.workspace_parameters = WorkspaceParameters # from moveit_msgs.msg import WorkspaceParameters
+            
+            # set planner inputs
+            joint_state = self._get_robot_state_msg()
+            robot_state = RobotState()
+            robot_state.joint_state = joint_state
+            motion_plan_request.start_state = robot_state
+            
+            if not request.request.goal_constraints:
+                goal_tolerance = self.goal_tolerance
+            else:
+                goal_tolerance = request.request.goal_constraints[0].joint_constraints[0].tolerance_above
+                
+            motion_plan_request.goal_constraints = self._generate_goal_constraints(joint_state.name,goal_tolerance)
+            motion_plan_request.group_name = "manipulator"
+            
+            motion_plan_goal.request = motion_plan_request
+
+            planning_options = PlanningOptions()
+            # The scene has already been applied using ApplyPlanningScene.
+            planning_options.planning_scene_diff.is_diff = True
+            planning_options.plan_only = True
+            planning_options.look_around = False
+            #planning_options.look_around_attempts = 0
+            #planning_options.max_safe_execution_cost = 0.0
+            planning_options.replan = False
+            #planning_options.replan_attempts = 1
+            #planning_options.replan_delay = 0.0
+
+
+            motion_plan_goal.planning_options = planning_options
+            
+            self._print_move_group_goal(motion_plan_goal)
+
+            self._moveit_goal_request_pending = True
+            self._moveit_goal_started = None
+            self._moveit_goal_complete = None
+            self._moveit_goal_feedback = None
+            self._moveit_goal_error = None
+            self._moveit_goal_handle = None
+            self._moveit_result = None
+            self._moveit_request = motion_plan_goal.request
+
             future = self._moveit_action_client.send_goal_async(
                 motion_plan_goal,
                 feedback_callback=self._moveit_feedback_callback,
@@ -1002,6 +1039,9 @@ class TrajSim2DNode(Node):
             )
 
         except Exception as exc:
+            self.get_logger().warn(f"************************************")
+            self.get_logger().warn(f"ERROR PROCESSING MOVEIT GOAL: {exc}")
+            self.get_logger().warn(f"************************************")
             self._moveit_goal_request_pending = False
             self._moveit_goal_started = False
             self._moveit_goal_complete = True
@@ -1077,7 +1117,6 @@ class TrajSim2DNode(Node):
             wrapped_result = future.result()
             result = wrapped_result.result
 
-            self._moveit_goal_complete = True
             self.save_moveit_performance_to_file(self.foldername,result,self._moveit_request)
             self._moveit_request = None
 
@@ -1089,12 +1128,16 @@ class TrajSim2DNode(Node):
                     f"PLANNING_FAILED_{result.error_code.val}"
                 )
                 self._moveit_result = None
+                self._moveit_goal_complete = True
                 return
 
             self._moveit_result = result
+            self._moveit_goal_complete = True
 
         except Exception as exc:
+            self.get_logger().warn(f"************************************")
             self.get_logger().warn(f"ERROR PROCESSING MOVEIT RESULT: {exc}")
+            self.get_logger().warn(f"************************************")
             self._moveit_goal_complete = True
             self._moveit_goal_error = f"RESULT_FAILED: {exc}"
             self._moveit_result = None
@@ -1102,7 +1145,7 @@ class TrajSim2DNode(Node):
     def _convert_trajectory(self,moveit_result:MoveGroup.Result) -> Trajectory:
         moveit_trajectory = moveit_result.planned_trajectory.joint_trajectory
         self._trajectory_callback(moveit_trajectory)
-        return 
+        return self.trajectory
     
     def _moveit_cancel_goal(self) -> None:
         goal_handle = self._moveit_goal_handle
@@ -1158,7 +1201,6 @@ class TrajSim2DNode(Node):
     def _main_loop(self) -> None:
         """Process one requested action and return to a passive state."""
         if self._pending_goal is None:
-            #print("BOOP: %s",self.state)
             # Visualise
             if self.state == self.SIMULATING:
                 self._advance_trajectory()
@@ -1166,35 +1208,45 @@ class TrajSim2DNode(Node):
             return
 
         request = self._pending_goal
-        try:
-            
-            if isinstance(request, MoveitRequest.Goal):
+        
+        if isinstance(request, MoveitRequest.Goal):
+            try:
                 self._get_moveit_trajectory()
+            except (OSError, ValueError, RuntimeError) as error:
+                self.get_logger().warn(f"************************************")
+                self.get_logger().warn(f"MOVEIT GOAL FAILED: {error}")
+                self.get_logger().warn(f"************************************")
+                self._pending_goal_error = str(error)
+            finally:
+                self._pending_goal = None
+                self._goal_complete.set()
+                return
+        
+        try:    
+            self.state = self._goal_state(request.goal)
+        
+            if request.goal == Simulation.Goal.GET_CURRENT_STATE:
+                pass
+            elif request.goal == Simulation.Goal.GENERATE_RANDOM_ENVIRONMENT:
+                self._generate_random_environment()
+            elif request.goal == Simulation.Goal.LOAD_ENVIRONMENT_FROM_FILE:
+                if not request.data:
+                    raise ValueError("environment filename cannot be empty")
+                self._load_environment(Path(request.data))
+            elif request.goal == Simulation.Goal.SET_TRAJECTORY_PROCESSING_SAVE_LOCATION:
+                if not request.data:
+                    raise ValueError("save location cannot be empty")
+                self.save_location = Path(request.data)
+            elif request.goal == Simulation.Goal.SAVE_ENVIRONMENT:
+                filename = (
+                    Path(request.data) if request.data else self.save_location
+                )
+                if filename is None:
+                    raise ValueError("no save location has been configured")
+                self._save_environment(filename)
+                self.save_location = filename
             else:
-                self.state = self._goal_state(request.goal)
-            
-                if request.goal == Simulation.Goal.GET_CURRENT_STATE:
-                    pass
-                elif request.goal == Simulation.Goal.GENERATE_RANDOM_ENVIRONMENT:
-                    self._generate_random_environment()
-                elif request.goal == Simulation.Goal.LOAD_ENVIRONMENT_FROM_FILE:
-                    if not request.data:
-                        raise ValueError("environment filename cannot be empty")
-                    self._load_environment(Path(request.data))
-                elif request.goal == Simulation.Goal.SET_TRAJECTORY_PROCESSING_SAVE_LOCATION:
-                    if not request.data:
-                        raise ValueError("save location cannot be empty")
-                    self.save_location = Path(request.data)
-                elif request.goal == Simulation.Goal.SAVE_ENVIRONMENT:
-                    filename = (
-                        Path(request.data) if request.data else self.save_location
-                    )
-                    if filename is None:
-                        raise ValueError("no save location has been configured")
-                    self._save_environment(filename)
-                    self.save_location = filename
-                else:
-                    raise ValueError(f"unknown action goal {request.goal}")
+                raise ValueError(f"unknown action goal {request.goal}")
         except (OSError, ValueError, RuntimeError) as error:
             self._pending_goal_error = str(error)
         finally:
@@ -1305,6 +1357,7 @@ class TrajSim2DNode(Node):
                 # save trajectory
                 save_trajectory_to_file(foldername=self.foldername,trajectory=self.trajectory,manip=self.manipulator)
                 self._reset_robot_state()
+                self.trajectory = None
                 self.state = self.IDLE
         else:
             [self.positions,self.velocities,self.efforts] = calculate_robot_state(self.manipulator,self.trajectory,index)

@@ -84,6 +84,26 @@ class Trajectory:
         self.base_wrench = np.zeros((N, 3), dtype=np.float64) # shape (N, 3)
         self.adhesion_exceeded = np.zeros((N,), dtype=bool)  # shape (N,)
         self.in_collision = np.zeros((N,), dtype=bool)  # shape (N,)
+        self.attachment_end: int = attachment_end
+        
+    def info(self) -> str:
+        """Return a readable summary of the trajectory."""
+        return (
+            "Trajectory(\n"
+            f"  time shape: {self.time.shape},\n"
+            f"  duration: {self.time[-1] - self.time[0]:.3f} s,\n"
+            f"  q shape: {self.q.shape},\n"
+            f"  qdot shape: {self.qdot.shape},\n"
+            f"  qdotdot shape: {self.qdotdot.shape},\n"
+            f"  tau shape: {self.tau.shape},\n"
+            f"  base_wrench shape: {self.base_wrench.shape},\n"
+            f"  collision points: {np.count_nonzero(self.in_collision)},\n"
+            f"  attachment_end: {self.attachment_end}\n"
+            ")"
+        )
+
+    def __str__(self) -> str:
+        return self.info()
         
 def evaluate_path(path: Path, manip: PlanarManipulator):
     pass
