@@ -162,14 +162,14 @@ def load_canvas_from_file(filename):
         raise ValueError(f"Unsupported canvas version: {data.get('version')}")
 
     arm_reference = data.get("arm_urdf")
-    print("Arm Ref: ",str(arm_reference))
+    
     if not arm_reference:
         raise ValueError("Canvas file is missing 'arm_urdf'")
     arm_path = Path(arm_reference).expanduser()
-    print("Arm Path: ",str(arm_path))
+    
     if not arm_path.is_absolute():
         arm_path = canvas_path.parent / arm_path
-    print("Arm Path: ",str(arm_path))
+    
     arm = PlanarManipulator(filename=str(arm_path))
 
     border = _load_array(data.get("border"), "border", ndim=2)

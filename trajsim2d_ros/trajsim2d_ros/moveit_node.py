@@ -27,13 +27,13 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.node import Node
 from rclpy.time import Time
 from sensor_msgs.msg import JointState
-from std_msgs.msg import String
+from std_msgs.msg import String, ColorRGBA
 from tf2_msgs.msg import TFMessage
 from trajectory_msgs.msg import JointTrajectory
 from rosidl_runtime_py.convert import message_to_ordereddict
 
 
-from moveit_msgs.msg import PlanningScene, PlanningOptions, CollisionObject, MoveItErrorCodes, MotionPlanRequest, Constraints, TrajectoryConstraints, JointConstraint, RobotState
+from moveit_msgs.msg import PlanningScene, PlanningOptions, CollisionObject, MoveItErrorCodes, MotionPlanRequest, Constraints, TrajectoryConstraints, JointConstraint, RobotState, ObjectColor
 from moveit_msgs.srv import ApplyPlanningScene
 from moveit_msgs.action import MoveGroup
 
@@ -70,6 +70,21 @@ class TrajSim2DNode(Node):
     INITIALISING_MOVEIT_GOAL = "INITIALISING_MOVEIT_GOAL"
     CONVERTING_TRAJECTORY = "CONVERTING_TRAJECTORY"
     CANCELLING_GOAL = "CANCELLING_GOAL"    
+    
+    COLORS = {
+        "red":         ColorRGBA(r=1.0, g=0.0, b=0.0, a=1.0),
+        "green":       ColorRGBA(r=0.0, g=1.0, b=0.0, a=1.0),
+        "blue":        ColorRGBA(r=0.0, g=0.0, b=1.0, a=1.0),
+        "yellow":      ColorRGBA(r=1.0, g=1.0, b=0.0, a=1.0),
+        "orange":      ColorRGBA(r=1.0, g=0.5, b=0.0, a=1.0),
+        "purple":      ColorRGBA(r=0.5, g=0.0, b=0.5, a=1.0),
+        "cyan":        ColorRGBA(r=0.0, g=1.0, b=1.0, a=1.0),
+        "magenta":     ColorRGBA(r=1.0, g=0.0, b=1.0, a=1.0),
+        "white":       ColorRGBA(r=1.0, g=1.0, b=1.0, a=1.0),
+        "black":       ColorRGBA(r=0.0, g=0.0, b=0.0, a=1.0),
+        "grey":        ColorRGBA(r=0.5, g=0.5, b=0.5, a=1.0),
+        "pink":        ColorRGBA(r=1.0, g=0.4, b=0.7, a=1.0),
+    }
 
     def __init__(self) -> None:
         super().__init__("trajsim2d")
@@ -127,14 +142,14 @@ class TrajSim2DNode(Node):
         self._planning_scene_set = None
         self._planning_scene_request_pending = False
         self._planning_scene_future = None
-        self._planning_scene_error = None
+        self._moveit_error = None
         self._moveit_scene_object_ids = set()
 
         # MoveIt action state
         self._moveit_goal_started = None
         self._moveit_goal_complete = None
         self._moveit_goal_feedback = None
-        self._moveit_goal_error = None
+        self._moveit_error = None
         self._moveit_goal_handle = None
         self._moveit_goal_request_pending = False
         self._moveit_goal_future = None
@@ -195,6 +210,8 @@ class TrajSim2DNode(Node):
         )
 
     def _goal_callback_sim(self, _goal_request: Simulation.Goal) -> GoalResponse:
+        if _goal_request.goal == Simulation.Goal.GET_CURRENT_STATE:
+            return GoalResponse.ACCEPT     
         if self._pending_goal is not None:
             return GoalResponse.REJECT
         return GoalResponse.ACCEPT
@@ -514,6 +531,7 @@ class TrajSim2DNode(Node):
             "manipulator": {
                 "planner_configs": [
                     "RRTConnectkConfigDefault",
+                    "BKPIECEkConfigDefault"
                 ],
             },
         }
@@ -581,6 +599,17 @@ class TrajSim2DNode(Node):
         robot_name = root.attrib["name"]
 
         srdf = ET.Element("robot", {"name": robot_name})
+        
+        ET.SubElement(
+            srdf,
+            "virtual_joint",
+            {
+                "name": "world_joint",
+                "type": "fixed",
+                "parent_frame": "map",
+                "child_link": base_link,
+            },
+        )
 
         group = ET.SubElement(srdf, "group", {"name": "manipulator"})
         ET.SubElement(
@@ -681,7 +710,11 @@ class TrajSim2DNode(Node):
     def _get_moveit_trajectory(self) -> None:
         
         while self._pending_goal is not None:
-            if self._planning_scene is None:
+            if self._moveit_error is not None:
+                self._pending_goal_error = "MOVEIT ERROR: " + self._moveit_error
+                self.state = self.IDLE
+                self._pending_goal = None
+            elif self._planning_scene is None:
                 self.state = self.GENERATING_PLANNING_SCENE
                 self._planning_scene = self._generate_planning_scene()
             elif self._planning_scene_set is None:
@@ -702,9 +735,9 @@ class TrajSim2DNode(Node):
                     self.state = self.SIMULATING
                     self.get_logger().info(self.trajectory)
                 else:
-                    if self._moveit_goal_error is not None:
+                    if self._moveit_error is not None:
                         self._pending_goal_error = (
-                            "MOVEIT_ERROR_" + self._moveit_goal_error
+                            "MOVEIT_ERROR_" + self._moveit_error
                         )
                     else:
                         self._pending_goal_error = (
@@ -724,52 +757,123 @@ class TrajSim2DNode(Node):
         self._moveit_goal_started = None
         self._moveit_goal_complete = None
         self._moveit_result = None
+        self._moveit_error = None
         
     def _generate_planning_scene(self) -> PlanningScene:
         
         convex_border = decompose_to_convex_shapes(self.border)
-        
         scene_polygons = [
             polygon
-            for polygon in [convex_border, *self.obstacles]
+            for polygon in [*convex_border, *self.obstacles]
             if polygon is not None
         ]
 
         planning_scene = PlanningScene()
-        planning_scene.is_diff = True
+        try:
+            robot_state = RobotState()
+            robot_state.joint_state = self._get_robot_state_msg()
+            planning_scene.robot_state = robot_state
+            planning_scene.robot_model_name = "trajsim2d_manipulator"
+            planning_scene.is_diff = False
 
-        current_ids = {
-            "border" if i == 0 else f"obstacle_{i - 1}"
-            for i, polygon in enumerate(scene_polygons)
-        }
-
-        # Remove objects that existed in the previous scene but no
-        # longer exist in the current simulator environment.
-        for object_id in self._moveit_scene_object_ids - current_ids:
-            collision = CollisionObject()
-            collision.id = object_id
-            collision.header.frame_id = self._moveit_planning_frame
-            collision.operation = CollisionObject.REMOVE
-
-            planning_scene.world.collision_objects.append(collision)
-
-        # Add or update current objects.
-        for i, polygon in enumerate(scene_polygons):
-            object_id = (
+            current_ids = {
                 "border" if i == 0 else f"obstacle_{i - 1}"
-            )
+                for i, polygon in enumerate(scene_polygons)
+            }
 
-            planning_scene.world.collision_objects.append(
-                self._polygon_to_collision_object(
-                    polygon,
-                    object_id,
+            # Remove objects that existed in the previous scene but no
+            # longer exist in the current simulator environment.
+            for object_id in self._moveit_scene_object_ids - current_ids:
+                collision = CollisionObject()
+                collision.id = object_id
+                collision.header.frame_id = self._moveit_planning_frame
+                collision.operation = CollisionObject.REMOVE
+                planning_scene.world.collision_objects.append(collision)
+                object_color = ObjectColor()
+                object_color.id = object_id
+                object_color.color = self.COLORS["blue"]
+                planning_scene.object_colors.append(object_color)
+
+            # Add or update current objects.
+            for i, polygon in enumerate(scene_polygons):
+                object_id = (
+                    "border" if i == 0 else f"obstacle_{i - 1}"
                 )
-            )
 
-        self._moveit_scene_object_ids = current_ids
+                planning_scene.world.collision_objects.append(
+                    self._polygon_to_collision_object(
+                        polygon,
+                        object_id,
+                    )
+                )
+
+            self._moveit_scene_object_ids = current_ids
+            
+            self._print_planning_scene(planning_scene,20)
+        except Exception as ex:
+            self.get_logger().error(f"Failed to Create Planning Scene: {ex}")
+            self._moveit_error(f"Failed to Create Planning Scene: {ex}")
 
         return planning_scene
     
+    def _print_planning_scene(self,msg:PlanningScene,severity:int) -> None:
+        """Log the contents of a PlanningScene message."""
+
+        logger = self.get_logger()
+
+        logger.log("PlanningScene:", severity)
+        logger.log(f"  name: {msg.name}", severity)
+        logger.log(f"  robot_model_name: {msg.robot_model_name}", severity)
+        logger.log(f"  is_diff: {msg.is_diff}", severity)
+
+        # Robot state
+        logger.log("  robot_state:", severity)
+        logger.log(
+            f"    joint_state: {msg.robot_state.joint_state}",
+            severity
+        )
+        logger.log(
+            f"    multi_dof_joint_state: "
+            f"{msg.robot_state.multi_dof_joint_state}",
+            severity
+        )
+        logger.log(
+            f"    attached_collision_objects: "
+            f"{msg.robot_state.attached_collision_objects}",
+            severity
+        )
+
+        # Fixed transforms
+        logger.log("  fixed_frame_transforms:", severity)
+        for transform in msg.fixed_frame_transforms:
+            logger.log(f"    {transform}", severity)
+
+        # Collision matrix
+        logger.log(
+            f"  allowed_collision_matrix: "
+            f"{msg.allowed_collision_matrix}",
+            severity
+        )
+
+        # Link properties
+        logger.log(f"  link_padding: {msg.link_padding}", severity)
+        logger.log(f"  link_scale: {msg.link_scale}", severity)
+
+        # Object colors
+        logger.log("  object_colors:", severity)
+        for color in msg.object_colors:
+            logger.log(f"    {color}", severity)
+
+        # World geometry
+        logger.log(
+            f"  world.collision_objects: "
+            f"{msg.world.collision_objects}",
+            severity
+        )
+        logger.log(
+            f"  world.octomap: {msg.world.octomap}",
+            severity
+        )
     def _polygon_to_collision_object(
         self,
         polygon: np.ndarray,
@@ -838,6 +942,8 @@ class TrajSim2DNode(Node):
         return collision
     
     def _triangulate_polygon(self, polygon: np.ndarray) -> tuple:
+        
+        
         polygon = np.asarray(polygon, dtype=float)
         
         if polygon.ndim != 2 or polygon.shape[1] != 2:
@@ -900,7 +1006,6 @@ class TrajSim2DNode(Node):
 
         self._planning_scene_set = None
         self._planning_scene_request_pending = True
-        self._planning_scene_error = None
 
         try:
             future = self._planning_scene_client.call_async(
@@ -913,7 +1018,7 @@ class TrajSim2DNode(Node):
 
         except Exception as exc:
             self._planning_scene_request_pending = False
-            self._planning_scene_error = str(exc)
+            self._moveit_error = str(exc)
             self._fail_moveit_request(
                 f"PLANNING_SCENE_REQUEST_FAILED: {exc}"
             )
@@ -926,32 +1031,32 @@ class TrajSim2DNode(Node):
 
             if response is not None and response.success:
                 self._planning_scene_set = True
-                self._planning_scene_error = None
+                self._moveit_error = None
                 self.get_logger().info(
                     "MoveIt planning scene applied successfully"
                 )
                 return
 
-            self._planning_scene_error = (
+            self._moveit_error = (
                 "ApplyPlanningScene returned success=False"
             )
 
         except Exception as exc:
-            self._planning_scene_error = str(exc)
+            self._moveit_error = str(exc)
 
         self._planning_scene_set = False
 
         self._fail_moveit_request(
             "PLANNING_SCENE_FAILED: "
-            + str(self._planning_scene_error)
+            + str(self._moveit_error)
         )
     
-    def _print_move_group_goal(self,msg:MoveGroup.Goal) -> None:
+    def _print_move_group_goal(self,msg:MoveGroup.Goal,severity:int) -> None:
         """Print the MoveGroup goal details."""
-        self.get_logger().info("MoveGroup Goal:")
+        self.get_logger().log("MoveGroup Goal:",severity)
 
-        self.get_logger().info(f"Request: {msg.request}")
-        self.get_logger().info(f"Planning options: {msg.planning_options}")
+        self.get_logger().log(f"Request: {msg.request}",severity)
+        self.get_logger().log(f"Planning options: {msg.planning_options}",severity)
     
     def _start_moveit_goal(self, request:MoveitRequest.Goal) -> None:
 
@@ -964,13 +1069,14 @@ class TrajSim2DNode(Node):
 
         if self._planning_scene_set is not True:
             self.get_logger().warn(f"PLANNING SCENE NOT SET")
+            self._moveit_error = "PLANNING SCENE NOT SET"
             return
 
         if not self._moveit_action_client.server_is_ready():
             self.get_logger().warn(f"MOVEIT ACTION SERVER UNAVAILABLE")
             self._moveit_goal_started = False
             self._moveit_goal_complete = True
-            self._moveit_goal_error = "ACTION_SERVER_UNAVAILABLE"
+            self._moveit_error = "ACTION_SERVER_UNAVAILABLE"
             return
 
         self.save_location = request.foldername
@@ -1027,13 +1133,13 @@ class TrajSim2DNode(Node):
 
             motion_plan_goal.planning_options = planning_options
             
-            self._print_move_group_goal(motion_plan_goal)
+            self._print_move_group_goal(motion_plan_goal,10)
 
             self._moveit_goal_request_pending = True
             self._moveit_goal_started = None
             self._moveit_goal_complete = None
             self._moveit_goal_feedback = None
-            self._moveit_goal_error = None
+            self._moveit_error = None
             self._moveit_goal_handle = None
             self._moveit_result = None
             self._moveit_request = motion_plan_goal.request
@@ -1055,7 +1161,7 @@ class TrajSim2DNode(Node):
             self._moveit_goal_request_pending = False
             self._moveit_goal_started = False
             self._moveit_goal_complete = True
-            self._moveit_goal_error = f"GOAL_SEND_FAILED: {exc}"
+            self._moveit_error = f"GOAL_SEND_FAILED: {exc}"
     
     def _generate_goal_constraints(self, names: list[str], tolerance:float) -> list[Constraints]:
         
@@ -1099,13 +1205,13 @@ class TrajSim2DNode(Node):
         except Exception as exc:
             self._moveit_goal_started = False
             self._moveit_goal_complete = True
-            self._moveit_goal_error = f"GOAL_RESPONSE_FAILED: {exc}"
+            self._moveit_error = f"GOAL_RESPONSE_FAILED: {exc}"
             return
 
         if not goal_handle.accepted:
             self._moveit_goal_started = False
             self._moveit_goal_complete = True
-            self._moveit_goal_error = "GOAL_REJECTED"
+            self._moveit_error = "GOAL_REJECTED"
             self.get_logger().warning("MoveIt rejected the goal")
             return
 
@@ -1134,7 +1240,7 @@ class TrajSim2DNode(Node):
                 result.error_code.val
                 != MoveItErrorCodes.SUCCESS
             ):
-                self._moveit_goal_error = (
+                self._moveit_error = (
                     f"PLANNING_FAILED_{result.error_code.val}"
                 )
                 self._moveit_result = None
@@ -1149,7 +1255,7 @@ class TrajSim2DNode(Node):
             self.get_logger().warn(f"ERROR PROCESSING MOVEIT RESULT: {exc}")
             self.get_logger().warn(f"************************************")
             self._moveit_goal_complete = True
-            self._moveit_goal_error = f"RESULT_FAILED: {exc}"
+            self._moveit_error = f"RESULT_FAILED: {exc}"
             self._moveit_result = None
     
     def _convert_trajectory(self,moveit_result:MoveGroup.Result) -> Trajectory:
@@ -1206,7 +1312,7 @@ class TrajSim2DNode(Node):
         self._pending_goal_error = "MOVEIT_ERROR_" + error
 
         # False is a terminal sentinel in the controller loop below.
-        self._pending_goal = False
+        self._pending_goal = None
     
     def _main_loop(self) -> None:
         """Process one requested action and return to a passive state."""
@@ -1233,11 +1339,12 @@ class TrajSim2DNode(Node):
                 return
         
         try:    
-            self.state = self._goal_state(request.goal)
-        
             if request.goal == Simulation.Goal.GET_CURRENT_STATE:
-                pass
-            elif request.goal == Simulation.Goal.GENERATE_RANDOM_ENVIRONMENT:
+                self._pending_goal = None
+                return
+            
+            self.state = self._goal_state(request.goal)
+            if request.goal == Simulation.Goal.GENERATE_RANDOM_ENVIRONMENT:
                 self._generate_random_environment()
             elif request.goal == Simulation.Goal.LOAD_ENVIRONMENT_FROM_FILE:
                 if not request.data:
@@ -1257,7 +1364,10 @@ class TrajSim2DNode(Node):
                 self.save_location = filename
             else:
                 raise ValueError(f"unknown action goal {request.goal}")
-        except (OSError, ValueError, RuntimeError) as error:
+        except Exception as error:
+            self.get_logger().warn(f"************************************")
+            self.get_logger().warn(f"SIMULATION GOAL FAILED: {error}")
+            self.get_logger().warn(f"************************************")
             self._pending_goal_error = str(error)
         finally:
             self.state = self.IDLE if self.manipulator is not None else self.VACANT
