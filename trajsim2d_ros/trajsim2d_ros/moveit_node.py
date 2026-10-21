@@ -46,6 +46,7 @@ from trajsim2d_core.twodmanip import PlanarManipulator
 from trajsim2d_core.geometry_canvas import GeometryCanvas
 from trajsim2d_core.visualisation import initialise_visualisation, update_trajectory_visualisation
 from trajsim2d_core.calculations import Trajectory, evaluate_trajectory_threaded,calculate_robot_state
+from trajsim2d_core.shape_utils import decompose_to_convex_shapes
 from trajsim2d_ros.action import Simulation, MoveitRequest
 from trajsim2d_ros.srv import RestartMoveit
 
@@ -296,6 +297,7 @@ class TrajSim2DNode(Node):
         #self.state = self.SIMULATING
 
     def _load_environment(self, filename: Path) -> None:
+        self.get_logger().info(str(filename))
         loaded = load_canvas_from_file(filename)
         self.manipulator = loaded.arm
         self.base_transform = np.asarray(loaded.base_transform, dtype=float)
@@ -354,7 +356,7 @@ class TrajSim2DNode(Node):
             border=self.border,
             objs=self.obstacles,
             arm=self.manipulator,
-            attempt_max=20
+            attempt_max=30
         )
 
         self._reset_robot_state()
@@ -363,6 +365,9 @@ class TrajSim2DNode(Node):
         )
         self._publish_robot_description()
         self._restart_moveit()
+        
+        if self.manipulator.in_collision(self.start_config) or self.manipulator.in_collision(self.goal_config):
+            self._pending_goal_error = "Failed to generate a random environment with valid start or goal configuration"
 
     def _publish_robot_description(self) -> None:
         if self.manipulator is None:
@@ -500,6 +505,10 @@ class TrajSim2DNode(Node):
                     "type": "geometric::RRTConnect",
                     "range": 0.0,
                 },
+                "BKPIECEkConfigDefault":{
+                    "type": "geometric::BKPIECE",
+                    "range": 0.0
+                }
             },
 
             "manipulator": {
@@ -717,9 +726,12 @@ class TrajSim2DNode(Node):
         self._moveit_result = None
         
     def _generate_planning_scene(self) -> PlanningScene:
+        
+        convex_border = decompose_to_convex_shapes(self.border)
+        
         scene_polygons = [
             polygon
-            for polygon in [self.border, *self.obstacles]
+            for polygon in [convex_border, *self.obstacles]
             if polygon is not None
         ]
 
@@ -872,7 +884,6 @@ class TrajSim2DNode(Node):
         self,
         planning_scene: PlanningScene,
     ) -> None:
-        self._initialise_moveit_interfaces()
 
         if self._planning_scene_request_pending:
             return
@@ -943,7 +954,6 @@ class TrajSim2DNode(Node):
         self.get_logger().info(f"Planning options: {msg.planning_options}")
     
     def _start_moveit_goal(self, request:MoveitRequest.Goal) -> None:
-        self._initialise_moveit_interfaces()
 
         
         if self._moveit_goal_request_pending:
@@ -1358,6 +1368,8 @@ class TrajSim2DNode(Node):
                 save_trajectory_to_file(foldername=self.foldername,trajectory=self.trajectory,manip=self.manipulator)
                 self._reset_robot_state()
                 self.trajectory = None
+                #self.canvas.remove_shape(self.arm_ids)
+                self.arm_ids = [None]
                 self.state = self.IDLE
         else:
             [self.positions,self.velocities,self.efforts] = calculate_robot_state(self.manipulator,self.trajectory,index)
