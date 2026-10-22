@@ -175,7 +175,7 @@ class PlanarManipulator:
         # not overlapped by the link geometry.
         thin_depth = 0.01
 
-        def add_box_geometry(link, length, centre_y, width):
+        def add_box_geometry(link, length, centre_y, width, collision_flag = True):
             length = max(float(length), 1e-6)
             visual = ET.SubElement(link, "visual")
             ET.SubElement(visual, "origin", {"xyz": f"0 {centre_y} 0", "rpy": "0 0 0"})
@@ -185,14 +185,15 @@ class PlanarManipulator:
                 "box",
                 {"size": f"{float(width)} {length} {thin_depth}"},
             )
-            collision = ET.SubElement(link, "collision")
-            ET.SubElement(collision, "origin", {"xyz": f"0 {centre_y} 0", "rpy": "0 0 0"})
-            collision_geometry = ET.SubElement(collision, "geometry")
-            ET.SubElement(
-                collision_geometry,
-                "box",
-                {"size": f"{float(width)} {length} {thin_depth}"},
-            )
+            if collision_flag:
+                collision = ET.SubElement(link, "collision")
+                ET.SubElement(collision, "origin", {"xyz": f"0 {centre_y} 0", "rpy": "0 0 0"})
+                collision_geometry = ET.SubElement(collision, "geometry")
+                ET.SubElement(
+                    collision_geometry,
+                    "box",
+                    {"size": f"{float(width)} {length} {thin_depth}"},
+                )
 
         def add_joint_geometry(link):
             visual = ET.SubElement(link, "visual")
@@ -223,7 +224,7 @@ class PlanarManipulator:
             width = float(width_values[0] if width_values.size == 1 else width_values[index])
             if index < self.n - 1:
                 link_length = float(self.link_lengths[index]) - 2.0 * float(self.joint_radius)
-                add_box_geometry(child_link, link_length, float(self.link_lengths[index]) / 2.0, width)
+                add_box_geometry(child_link, link_length, float(self.link_lengths[index]) / 2.0, width, not index == 0)
             else:
                 link_length = float(self.link_lengths[index]) - float(self.joint_radius)
                 add_box_geometry(child_link, link_length, (float(self.link_lengths[index])+float(self.joint_radius))/2.0, width)

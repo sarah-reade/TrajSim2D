@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 import math
+import re
 import threading
 import tempfile
 import time
@@ -18,6 +20,7 @@ from collections.abc import Mapping
 
 import rclpy
 from geometry_msgs.msg import Point, Pose, PoseStamped, TransformStamped
+from shape_msgs.msg import SolidPrimitive
 from shape_msgs.msg import Mesh, MeshTriangle
 from nav_msgs.msg import OccupancyGrid
 from rclpy.action import ActionServer, GoalResponse, ActionClient
@@ -33,7 +36,7 @@ from trajectory_msgs.msg import JointTrajectory
 from rosidl_runtime_py.convert import message_to_ordereddict
 
 
-from moveit_msgs.msg import PlanningScene, PlanningOptions, CollisionObject, MoveItErrorCodes, MotionPlanRequest, Constraints, TrajectoryConstraints, JointConstraint, RobotState, ObjectColor
+from moveit_msgs.msg import PlanningScene, PlanningSceneWorld,PlanningOptions, CollisionObject, MoveItErrorCodes, MotionPlanRequest, Constraints, TrajectoryConstraints, JointConstraint, RobotState, ObjectColor, DisplayRobotState
 from moveit_msgs.srv import ApplyPlanningScene
 from moveit_msgs.action import MoveGroup
 
@@ -93,6 +96,7 @@ class TrajSim2DNode(Node):
         self.declare_parameter("resolution", 0.05)
         self.declare_parameter("publish_rate", 30.0)
         self.declare_parameter("goal_tolerance", 0.01)
+        self.declare_parameter("robot_description", "")
 
         self.canvas = None
         self.frame_id = str(self.get_parameter("frame_id").value)
@@ -171,6 +175,7 @@ class TrajSim2DNode(Node):
         )
 
         self.robot_state_pub = self.create_publisher(JointState, "robot_state", 10)
+        self.display_robot_state_pub = self.create_publisher(DisplayRobotState, "display_robot_state", 10)
         self.goal_pose_pub = self.create_publisher(JointState, "goal_pose", 10)
         self.goal_ee_pose_pub = self.create_publisher(
             PoseStamped, "goal_ee_pose", 10
@@ -183,6 +188,9 @@ class TrajSim2DNode(Node):
         )
         self.robot_description_pub = self.create_publisher(
             String, "robot_description", description_qos
+        )
+        self.semantic_robot_description_pub = self.create_publisher(
+            String, "robot_description_semantic", description_qos
         )
         self.tf_pub = self.create_publisher(TFMessage, "/tf", 10)
         self.action_server_sim = ActionServer(
@@ -267,8 +275,8 @@ class TrajSim2DNode(Node):
         points: List[Tuple[float, np.ndarray, np.ndarray]] = []
         previous_time = -1.0
         for point in message.points:
-            position = np.asarray(point.positions, dtype=float)
-            velocity = np.asarray(point.velocities, dtype=float)
+            position = np.asarray(point.positions, dtype=float)*-1
+            velocity = np.asarray(point.velocities, dtype=float)*-1
             if position.size != self.manipulator.n:
                 self.get_logger().error(
                     "Each JointTrajectory point must contain every joint position. Joint Trajectory:" + self._joint_trajectory_info(message)
@@ -391,15 +399,40 @@ class TrajSim2DNode(Node):
             return
         temporary_path: Optional[Path] = None
         try:
+            
             with tempfile.NamedTemporaryFile(
                 mode="w+b", suffix=".urdf", delete=False
             ) as temporary_file:
                 temporary_path = Path(temporary_file.name)
             self.manipulator.save_to_urdf(str(temporary_path))
             self.description = temporary_path.read_text(encoding="utf-8")
+            
+            # Remove the custom <trajsim2d> element and all its contents.
+            robot_description = re.sub(
+                r"<trajsim2d\b[^>]*>.*?</trajsim2d\s*>",
+                "",
+                self.description,
+                flags=re.DOTALL,
+            )
+            
             message = String()
-            message.data = self.description
+            message.data = robot_description
             self.robot_description_pub.publish(message)
+            semantic_robot_description  = self._generate_srdf(robot_description)
+            message = String()
+            message.data = semantic_robot_description
+            self.semantic_robot_description_pub.publish(message)
+
+            # Also expose it as a ROS 2 parameter.
+            self.set_parameters([
+                rclpy.parameter.Parameter(
+                    "robot_description",
+                    rclpy.Parameter.Type.STRING,
+                    robot_description,
+                )
+            ])
+        except Exception as ex:
+            self._pending_goal_error(f"Failed to publish robot description: {ex}")
         finally:
             if temporary_path is not None:
                 temporary_path.unlink(missing_ok=True)
@@ -453,7 +486,7 @@ class TrajSim2DNode(Node):
             raise ValueError("Robot description is not a valid URDF")
 
         # The SRDF must define planning groups for MoveIt.
-        srdf = self.generate_srdf(self.description)
+        srdf = self._generate_srdf(self.description)
 
         if not srdf:
             raise ValueError(
@@ -545,7 +578,7 @@ class TrajSim2DNode(Node):
 
         return config_dir
 
-    def generate_srdf(self,urdf: str) -> str:
+    def _generate_srdf(self,urdf: str) -> str:
         root = ET.fromstring(urdf)
 
         links = {
@@ -761,6 +794,26 @@ class TrajSim2DNode(Node):
         
     def _generate_planning_scene(self) -> PlanningScene:
         
+        planning_scene = PlanningScene()
+        try:
+            if self._cost_map_cache is None:
+                raise Exception ("No costmap available")
+            
+            planning_scene.robot_state = self._get_robot_state_msg()
+            planning_scene.robot_model_name = "trajsim2d_manipulator"
+            planning_scene.is_diff = False
+            
+            planning_scene.world = self._costmap2planningworld(self._cost_map_cache)
+            
+            self._print_planning_scene(planning_scene,10)
+        except Exception as ex:
+            self.get_logger().error(f"Failed to Create Planning Scene: {ex}")
+            self._moveit_error(f"Failed to Create Planning Scene: {ex}")
+        return planning_scene
+            
+            
+            
+        
         convex_border = decompose_to_convex_shapes(self.border)
         scene_polygons = [
             polygon
@@ -768,11 +821,8 @@ class TrajSim2DNode(Node):
             if polygon is not None
         ]
 
-        planning_scene = PlanningScene()
         try:
-            robot_state = RobotState()
-            robot_state.joint_state = self._get_robot_state_msg()
-            planning_scene.robot_state = robot_state
+            planning_scene.robot_state = self._get_robot_state_msg()
             planning_scene.robot_model_name = "trajsim2d_manipulator"
             planning_scene.is_diff = False
 
@@ -874,6 +924,7 @@ class TrajSim2DNode(Node):
             f"  world.octomap: {msg.world.octomap}",
             severity
         )
+    
     def _polygon_to_collision_object(
         self,
         polygon: np.ndarray,
@@ -985,6 +1036,144 @@ class TrajSim2DNode(Node):
         ]
 
         return polygon, triangles
+    
+    def _costmap2planningworld(self, costmap: OccupancyGrid) -> PlanningSceneWorld:
+        planning_world = PlanningSceneWorld()
+        
+        width = costmap.info.width
+        height = costmap.info.height
+        resolution = costmap.info.resolution
+        origin = costmap.info.origin
+
+        if width == 0 or height == 0 or resolution <= 0.0:
+            return planning_world
+
+        # 2D homogeneous transform: base_frame -> map.
+        T_map_base = np.asarray(
+            self.manipulator.base_tf, dtype=float
+        ).reshape(3, 3)
+
+        # Inverse transform: map -> base_frame.
+        T_base_map = np.linalg.inv(T_map_base)
+
+        data = costmap.data
+        occupied_threshold = 50
+
+        # Box height and centre in the planning scene.
+        z_min = float(self._moveit_scene_z_min)
+        z_max = float(self._moveit_scene_z_max)
+
+        if z_max <= z_min:
+            raise ValueError(
+                f"Invalid planning scene Z limits: "
+                f"z_min={z_min}, z_max={z_max}"
+            )
+
+        box_height = z_max - z_min
+        box_center_z = (z_min + z_max) / 2.0
+
+        # Costmap origin yaw.
+        yaw_origin = 2.0 * np.arctan2(
+            origin.orientation.z,
+            origin.orientation.w,
+        )
+
+        c = np.cos(yaw_origin)
+        s = np.sin(yaw_origin)
+        R_map_grid = np.array([
+            [c, -s],
+            [s,  c],
+        ])
+
+        # Rotation from map coordinates into base_frame.
+        R_base_map = T_base_map[:2, :2]
+
+        # Transform the costmap origin's orientation into base_frame.
+        R_base_grid = R_base_map @ R_map_grid
+        yaw_base_grid = np.arctan2(
+            R_base_grid[1, 0],
+            R_base_grid[0, 0],
+        )
+
+        qz = float(np.sin(yaw_base_grid / 2.0))
+        qw = float(np.cos(yaw_base_grid / 2.0))
+
+        # OccupancyGrid data is row-major: index = y * width + x.
+        occupied = [
+            data[y * width + x] >= occupied_threshold
+            for y in range(height)
+            for x in range(width)
+        ]
+
+        # Merge contiguous occupied cells into horizontal runs.
+        for y in range(height):
+            x = 0
+
+            while x < width:
+                if not occupied[y * width + x]:
+                    x += 1
+                    continue
+
+                start_x = x
+
+                while x < width and occupied[y * width + x]:
+                    x += 1
+
+                run_width = x - start_x
+
+                # Centre of this run in the costmap grid coordinates.
+                p_grid = np.array([
+                    (start_x + run_width / 2.0) * resolution,
+                    (y + 0.5) * resolution,
+                    1.0,
+                ])
+
+                # Convert grid position into map coordinates.
+                # Include the costmap origin translation.
+                p_map = np.array([
+                    origin.position.x,
+                    origin.position.y,
+                ]) + R_map_grid @ p_grid[:2]
+
+                p_map_h = np.array([
+                    p_map[0],
+                    p_map[1],
+                    1.0,
+                ])
+
+                # Convert map position into base_frame coordinates.
+                p_base = T_base_map @ p_map_h
+
+                collision = CollisionObject()
+                collision.header = deepcopy(costmap.header)
+                collision.header.frame_id = self.base_frame
+                collision.id = f"costmap_{start_x}_{y}"
+
+                box = SolidPrimitive()
+                box.type = SolidPrimitive.BOX
+                box.dimensions = [
+                    run_width * resolution,
+                    resolution,
+                    box_height,
+                ]
+
+                pose = Pose()
+                pose.position.x = float(p_base[0])
+                pose.position.y = float(p_base[1])
+                pose.position.z = box_center_z
+
+                pose.orientation.x = 0.0
+                pose.orientation.y = 0.0
+                pose.orientation.z = qz
+                pose.orientation.w = qw
+
+                collision.primitives.append(box)
+                collision.primitive_poses.append(pose)
+                collision.operation = CollisionObject.ADD
+
+                planning_world.collision_objects.append(collision)
+
+        return planning_world
     
     def _set_planning_scene(
         self,
@@ -1104,17 +1293,14 @@ class TrajSim2DNode(Node):
             # motion_plan_request.workspace_parameters = WorkspaceParameters # from moveit_msgs.msg import WorkspaceParameters
             
             # set planner inputs
-            joint_state = self._get_robot_state_msg()
-            robot_state = RobotState()
-            robot_state.joint_state = joint_state
-            motion_plan_request.start_state = robot_state
+            motion_plan_request.start_state = self._get_robot_state_msg()
             
             if not request.request.goal_constraints:
                 goal_tolerance = self.goal_tolerance
             else:
                 goal_tolerance = request.request.goal_constraints[0].joint_constraints[0].tolerance_above
                 
-            motion_plan_request.goal_constraints = self._generate_goal_constraints(joint_state.name,goal_tolerance)
+            motion_plan_request.goal_constraints = self._generate_goal_constraints(motion_plan_request.start_state.joint_state.name,goal_tolerance)
             motion_plan_request.group_name = "manipulator"
             
             motion_plan_goal.request = motion_plan_request
@@ -1169,7 +1355,7 @@ class TrajSim2DNode(Node):
         goal_constraint = Constraints()
         joint_constraints = []
         
-        for joint_name,position in zip(names,self.goal_config):
+        for joint_name,position in zip(names,self.goal_config*-1):
             joint_constraint = JointConstraint()
             joint_constraint.joint_name = joint_name
             joint_constraint.position = position
@@ -1386,7 +1572,20 @@ class TrajSim2DNode(Node):
         }
         return states.get(goal, self.VACANT)
 
-    def _get_robot_state_msg(self,now:Time = None,names: list = None) -> JointState:
+    def _get_moveit_robot_state_msg(self,now:Time = None,names: list = None) -> DisplayRobotState:
+        display_robot_state = DisplayRobotState()
+        robot_state_msg = self._get_robot_state_msg(now,names)
+        display_robot_state.state = robot_state_msg
+        return display_robot_state
+    
+    def _get_robot_state_msg(self,now:Time = None,names: list = None) -> RobotState:
+            
+            state = RobotState()
+            joint_state = self._get_joint_state_msg(now,names)
+            state.joint_state = joint_state
+            return state
+        
+    def _get_joint_state_msg(self,now:Time = None,names: list = None) -> JointState:
         
         if now is None:
             now = self.get_clock().now().to_msg()
@@ -1395,11 +1594,11 @@ class TrajSim2DNode(Node):
         
         state = JointState()
         state.header.stamp = now
-        state.header.frame_id = self.frame_id
+        state.header.frame_id = self.base_frame
         state.name = names
-        state.position = self.positions.tolist()
-        state.velocity = self.velocities.tolist()
-        state.effort = self.efforts.tolist()
+        state.position = (self.positions*-1.0).tolist()
+        state.velocity = (self.velocities*-1.0).tolist()
+        state.effort = (self.efforts*-1.0).tolist()
         return state
                 
     def _interrupt_loop_sim(self) -> None:
@@ -1408,8 +1607,10 @@ class TrajSim2DNode(Node):
             return
         now = self.get_clock().now().to_msg()
         names = [f"joint_{index + 1}" for index in range(self.manipulator.n)]
-        state = self._get_robot_state_msg(now,names)
+        state = self._get_joint_state_msg(now,names)
         self.robot_state_pub.publish(state)
+        display_state = self._get_moveit_robot_state_msg()
+        self.display_robot_state_pub.publish(display_state)        
 
         fk_tfs = self.manipulator.forward_kinematics(
             self.base_transform, self.positions
