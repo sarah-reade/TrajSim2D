@@ -18,14 +18,20 @@ class MoveitClient(Node):
     PLANNERS = {
         "ompl": ["SBLkConfigDefault","ESTkConfigDefault","RRTConnectkConfigDefault"]
     }
-    RESULTS_FOLDER = "/home/ewalker/Downloads/moveit/results/"
-    NUM_PLANNING_ATTEMPTS = 1
-    PLANNING_TIME = 10.0
-    GOAL_TOLERANCE = 0.01
-    GROUP_NAME = "manipulator"
 
     def __init__(self):
         super().__init__("moveit_client")
+        self.declare_parameter("results_folder", "/home/ewalker/Downloads/moveit/results/")
+        self.declare_parameter("num_planning_attempts", 1)
+        self.declare_parameter("planning_time", 10.0)
+        self.declare_parameter("goal_tolerance", 0.01)
+        self.declare_parameter("group_name", "manipulator")
+
+        self.results_folder = self.get_parameter("results_folder").value
+        self.num_planning_attempts = self.get_parameter("num_planning_attempts").value
+        self.planning_time = self.get_parameter("planning_time").value
+        self.goal_tolerance = self.get_parameter("goal_tolerance").value
+        self.group_name = self.get_parameter("group_name").value
 
         self._moveit_action_client = ActionClient(
             self,
@@ -139,16 +145,16 @@ class MoveitClient(Node):
                         
     def build_motion_plan_request(self,pipeline:str,planner:str) -> MotionPlanRequest:
         request = MotionPlanRequest()
-        request.group_name = self.GROUP_NAME
+        request.group_name = self.group_name
         request.pipeline_id = pipeline
         request.planner_id = planner
-        request.num_planning_attempts = self.NUM_PLANNING_ATTEMPTS
-        request.allowed_planning_time = self.PLANNING_TIME
+        request.num_planning_attempts = self.num_planning_attempts
+        request.allowed_planning_time = self.planning_time
         return request
                 
     def generate_folder(self, environment: str, planner_id: str) -> str:
         env_path = Path(environment).expanduser()
-        results_path = Path(self.RESULTS_FOLDER).expanduser()
+        results_path = Path(self.results_folder).expanduser()
 
         environment_name = f"{env_path.parent.name}_{env_path.stem}"
 
