@@ -72,7 +72,7 @@ def main(args=None):
     request = MotionPlanRequest()
     request.group_name = "manipulator"
     request.pipeline_id = "ompl"
-    request.planner_id = "RRTConnectkConfigDefault"
+    request.planner_id = "RRTstarkConfigDefault"# "RRTstarkConfigDefault"#"LBKPIECEkConfigDefault"#"RRTConnectkConfigDefault"
     request.num_planning_attempts = 5
     request.allowed_planning_time = 5.0
 

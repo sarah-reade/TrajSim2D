@@ -88,6 +88,101 @@ class TrajSim2DNode(Node):
         "grey":        ColorRGBA(r=0.5, g=0.5, b=0.5, a=1.0),
         "pink":        ColorRGBA(r=1.0, g=0.4, b=0.7, a=1.0),
     }
+    
+    PLANNER_CONFIG = {
+        "SBLkConfigDefault": {
+            "type": "geometric::SBL",
+            "range": 0.0,
+        },
+        "ESTkConfigDefault": {
+            "type": "geometric::EST",
+            "range": 0.0,
+        },
+        "LBKPIECEkConfigDefault": {
+            "type": "geometric::LBKPIECE",
+            "range": 0.0,
+        },
+        "BKPIECEkConfigDefault": {
+            "type": "geometric::BKPIECE",
+            "range": 0.0,
+        },
+        "KPIECEkConfigDefault": {
+            "type": "geometric::KPIECE",
+            "range": 0.0,
+        },
+        "RRTkConfigDefault": {
+            "type": "geometric::RRT",
+            "range": 0.0,
+        },
+        "RRTConnectkConfigDefault": {
+            "type": "geometric::RRTConnect",
+            "range": 0.0,
+        },
+        "RRTstarkConfigDefault": {
+            "type": "geometric::RRTstar",
+            "range": 0.0,
+        },
+        "TRRTkConfigDefault": {
+            "type": "geometric::TRRT",
+            "range": 0.0,
+        },
+        "PRMkConfigDefault": {
+            "type": "geometric::PRM",
+            "range": 0.0,
+        },
+        "PRMstarkConfigDefault": {
+            "type": "geometric::PRMstar",
+            "range": 0.0,
+        },
+        "FMTkConfigDefault": {
+            "type": "geometric::FMT",
+            "range": 0.0,
+        },
+        "BFMTkConfigDefault": {
+            "type": "geometric::BFMT",
+            "range": 0.0,
+        },
+        "PDSTkConfigDefault": {
+            "type": "geometric::PDST",
+            "range": 0.0,
+        },
+        "STRIDEkConfigDefault": {
+            "type": "geometric::STRIDE",
+            "range": 0.0,
+        },
+        "BiTRRTkConfigDefault": {
+            "type": "geometric::BiTRRT",
+            "range": 0.0,
+        },
+        "LBTRRTkConfigDefault": {
+            "type": "geometric::LBTRRT",
+            "range": 0.0,
+        },
+        "BiESTkConfigDefault": {
+            "type": "geometric::BiEST",
+            "range": 0.0,
+        },
+        "ProjESTkConfigDefault": {
+            "type": "geometric::ProjEST",
+            "range": 0.0,
+        },
+        "LazyPRMkConfigDefault": {
+            "type": "geometric::LazyPRM",
+            "range": 0.0,
+        },
+        "SPARSkConfigDefault": {
+            "type": "geometric::SPARS",
+            "range": 0.0,
+        },
+        "SPARStwokConfigDefault": {
+            "type": "geometric::SPARStwo",
+            "range": 0.0,
+        },
+        "AnytimePathShortening": {
+            "type": "geometric::AnytimePathShortening",
+            "range": 0.0,
+        },
+    }
 
     def __init__(self) -> None:
         super().__init__("trajsim2d")
@@ -536,7 +631,7 @@ class TrajSim2DNode(Node):
             yaml.safe_dump(kinematics, f,sort_keys=False)
 
         # Generic OMPL configuration.
-        ompl_config = {
+        planner_config = {
             "planning_plugin": "ompl_interface/OMPLPlanner",
 
             "request_adapters": (
@@ -550,27 +645,16 @@ class TrajSim2DNode(Node):
 
             "start_state_max_bounds_error": 0.1,
 
-            "planner_configs": {
-                "RRTConnectkConfigDefault": {
-                    "type": "geometric::RRTConnect",
-                    "range": 0.0,
-                },
-                "BKPIECEkConfigDefault":{
-                    "type": "geometric::BKPIECE",
-                    "range": 0.0
-                }
-            },
+            "planner_configs": self.PLANNER_CONFIG,
 
             "manipulator": {
-                "planner_configs": [
-                    "RRTConnectkConfigDefault",
-                    "BKPIECEkConfigDefault"
-                ],
+                "planner_configs": list(self.PLANNER_CONFIG.keys()),
+                "projection_evaluator": "joints(joint_1,joint_2)",
             },
         }
 
         with (config_dir / "ompl_planning.yaml").open("w") as f:
-            yaml.safe_dump(ompl_config, f, sort_keys=False)
+            yaml.safe_dump(planner_config, f, sort_keys=False)
 
         self.get_logger().info(
             f"Generated MoveIt configuration in {config_dir}"
@@ -766,7 +850,6 @@ class TrajSim2DNode(Node):
                         self._moveit_result
                     )
                     self.state = self.SIMULATING
-                    self.get_logger().info(self.trajectory)
                 else:
                     if self._moveit_error is not None:
                         self._pending_goal_error = (
@@ -781,11 +864,11 @@ class TrajSim2DNode(Node):
                 self._pending_goal = None
             else:
                 self._pending_goal = None
-        
-        
+                
         if self._moveit_goal_started and not self._moveit_goal_complete:
             self._moveit_cancel_goal()
         self._planning_scene = None
+        self.get_logger().info(f"Planning Scene: {self._planning_scene}")
         self._planning_scene_set = None
         self._moveit_goal_started = None
         self._moveit_goal_complete = None
@@ -1050,7 +1133,7 @@ class TrajSim2DNode(Node):
 
         # 2D homogeneous transform: base_frame -> map.
         T_map_base = np.asarray(
-            self.manipulator.base_tf, dtype=float
+            self.base_transform, dtype=float
         ).reshape(3, 3)
 
         # Inverse transform: map -> base_frame.
@@ -1679,7 +1762,7 @@ class TrajSim2DNode(Node):
                 save_trajectory_to_file(foldername=self.foldername,trajectory=self.trajectory,manip=self.manipulator)
                 self._reset_robot_state()
                 self.trajectory = None
-                #self.canvas.remove_shape(self.arm_ids)
+                self.canvas.remove_shape(self.arm_ids)
                 self.arm_ids = [None]
                 self.state = self.IDLE
         else:

@@ -24,6 +24,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 # package. Install the node module into that directory instead of invoking
 # ament_python_install_package, whose package-name filter would exclude it.
 install(FILES
+  ${PROJECT_NAME}/auto_node.py
   ${PROJECT_NAME}/moveit_launch.py
   ${PROJECT_NAME}/moveit_node.py
   ${PROJECT_NAME}/node.py
@@ -31,6 +32,7 @@ install(FILES
   DESTINATION ${PYTHON_INSTALL_DIR}/${PROJECT_NAME}
 )
 install(PROGRAMS
+  scripts/auto_node
   scripts/moveit_launch_node
   scripts/trajsim2d_moveit_node
   scripts/trajsim2d_node
