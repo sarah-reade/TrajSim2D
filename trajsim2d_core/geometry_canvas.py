@@ -276,10 +276,15 @@ class GeometryCanvas:
 
         @param shape_id Unique identifier of the shape to remove.
         """
+        if isinstance(shape_id,list):
+            for shape_ in shape_id:
+                self.remove_shape(shape_)
+            return
+        
         shape = self.shapes.pop(shape_id, None)
         if shape is not None and hasattr(shape, "remove"):
             shape.remove()
-        
+        return
 
 
     def _refresh(self):
