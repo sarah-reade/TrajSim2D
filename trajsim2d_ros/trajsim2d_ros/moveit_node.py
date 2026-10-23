@@ -1607,11 +1607,19 @@ class TrajSim2DNode(Node):
                 self._goal_complete.set()
                 return
         
-        try:    
+        try:
             if request.goal == Simulation.Goal.GET_CURRENT_STATE:
                 self._pending_goal = None
+                self._goal_complete.set()
                 return
+        except Exception as error:
+            self.get_logger().warn(f"************************************")
+            self.get_logger().warn(f"SIMULATION GOAL FAILED: {error}")
+            self.get_logger().warn(f"************************************")
+            self._pending_goal_error = str(error)
             
+        
+        try:
             self.state = self._goal_state(request.goal)
             if request.goal == Simulation.Goal.GENERATE_RANDOM_ENVIRONMENT:
                 self._generate_random_environment()

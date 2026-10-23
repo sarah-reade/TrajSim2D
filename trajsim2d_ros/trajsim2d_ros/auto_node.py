@@ -14,13 +14,13 @@ from trajsim2d_ros.action import MoveitRequest, Simulation
 
 class MoveitClient(Node):
 
-    ENVIRONMENTS = ["/home/ewalker/Downloads/moveit_difficult_env/world.canvas"]
+    ENVIRONMENTS = ["/home/ewalker/Downloads/moveit_safe_env/world.canvas"]
     PLANNERS = {
         "ompl": ["SBLkConfigDefault","ESTkConfigDefault","RRTConnectkConfigDefault"]
     }
     RESULTS_FOLDER = "/home/ewalker/Downloads/moveit/results/"
     NUM_PLANNING_ATTEMPTS = 1
-    PLANNING_TIME = 10
+    PLANNING_TIME = 10.0
     GOAL_TOLERANCE = 0.01
     GROUP_NAME = "manipulator"
 
@@ -44,8 +44,9 @@ class MoveitClient(Node):
             for name, value in vars(Simulation.Goal).items()
             if name.isupper() and isinstance(value, int)
         }
+        
 
-    def send_simulation_goal(self, goal:int,data:str=None):
+    def send_simulation_goal(self, goal:int,data:str=""):
         # Wait for the action server
         self.get_logger().info("Waiting for Simulation action server...")
         
@@ -53,7 +54,7 @@ class MoveitClient(Node):
             self.get_logger().error("Action server unavailable")
             return None
 
-        request = Simulation.Goal
+        request = Simulation.Goal()
         if goal not in self.valid_simulation_goals:
             self.get_logger().error(f"Simulation goal invalid: {goal}")
             return None
@@ -64,7 +65,7 @@ class MoveitClient(Node):
         
         self.get_logger().info("Sending simulation goal...")
         
-        send_future = self._sim_action_client.send_goal_async(goal,
+        send_future = self._sim_action_client.send_goal_async(request,
             feedback_callback=self.feedback_callback,
         )
         
@@ -187,8 +188,11 @@ class MoveitClient(Node):
                                 f"with pipeline '{pipeline}' and planner '{planner}': {ex}"
                             )
                         
+        
+        while self.get_sim_node_state() != "IDLE":
+            self.get_logger().info(f"Waiting for simulation to become idle. Simulation node state: {self.sim_node_state}")
                         
-                        
+
             
             
 
