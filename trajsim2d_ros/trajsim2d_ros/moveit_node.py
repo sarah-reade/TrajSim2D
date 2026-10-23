@@ -89,7 +89,7 @@ class TrajSim2DNode(Node):
         "pink":        ColorRGBA(r=1.0, g=0.4, b=0.7, a=1.0),
     }
     
-    PLANNER_CONFIG = {
+    OMPL_PLANNER_CONFIG = {
         "SBLkConfigDefault": {
             "type": "geometric::SBL",
             "range": 0.0,
@@ -192,6 +192,7 @@ class TrajSim2DNode(Node):
         self.declare_parameter("publish_rate", 30.0)
         self.declare_parameter("goal_tolerance", 0.01)
         self.declare_parameter("robot_description", "")
+        self.declare_parameter("display_trajectory", False)
 
         self.canvas = None
         self.frame_id = str(self.get_parameter("frame_id").value)
@@ -202,6 +203,7 @@ class TrajSim2DNode(Node):
         self.goal_tolerance = float(self.get_parameter("goal_tolerance").value)
         if self.goal_tolerance <= 0.0:
             raise ValueError("goal tolerance must be positive")
+        self.display_trajectory = bool(self.get_parameter("display_trajectory").value)
 
         self._eval_thread: Optional[threading.Thread] = None
         self.manipulator: Optional[PlanarManipulator] = None
@@ -631,7 +633,7 @@ class TrajSim2DNode(Node):
             yaml.safe_dump(kinematics, f,sort_keys=False)
 
         # Generic OMPL configuration.
-        planner_config = {
+        ompl_planner_config = {
             "planning_plugin": "ompl_interface/OMPLPlanner",
 
             "request_adapters": (
@@ -645,16 +647,16 @@ class TrajSim2DNode(Node):
 
             "start_state_max_bounds_error": 0.1,
 
-            "planner_configs": self.PLANNER_CONFIG,
+            "planner_configs": self.OMPL_PLANNER_CONFIG,
 
             "manipulator": {
-                "planner_configs": list(self.PLANNER_CONFIG.keys()),
+                "planner_configs": list(self.OMPL_PLANNER_CONFIG.keys()),
                 "projection_evaluator": "joints(joint_1,joint_2)",
             },
         }
 
         with (config_dir / "ompl_planning.yaml").open("w") as f:
-            yaml.safe_dump(planner_config, f, sort_keys=False)
+            yaml.safe_dump(ompl_planner_config, f, sort_keys=False)
 
         self.get_logger().info(
             f"Generated MoveIt configuration in {config_dir}"
@@ -1755,13 +1757,13 @@ class TrajSim2DNode(Node):
         if self.trajectory_start_time is None:
             self.arm_ids = [None]
             self.trajectory_start_time = time.monotonic()
-            
+        
         
         elapsed = time.monotonic() - self.trajectory_start_time
         
         [self.arm_ids, done, index] = update_trajectory_visualisation(elapsed,self.canvas,self.manipulator,self.trajectory,self.arm_ids,border=self.border,objs=self.obstacles)
         
-        if done:
+        if done or not self.display_trajectory:
             # check if calculation thread still running 
             if self._eval_thread.is_alive():
                 pass
