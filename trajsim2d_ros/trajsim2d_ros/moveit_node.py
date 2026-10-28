@@ -89,99 +89,134 @@ class TrajSim2DNode(Node):
         "pink":        ColorRGBA(r=1.0, g=0.4, b=0.7, a=1.0),
     }
     
-    OMPL_PLANNER_CONFIG = {
-        "SBLkConfigDefault": {
-            "type": "geometric::SBL",
-            "range": 0.0,
+    PLUGIN_LIST = ["ompl","pilz_industrial_motion_planner","chomp","stomp","trajopt"]
+    PLANNER_CONFIGS = {
+        "ompl_interface/OMPLPlanner": {
+            "SBLkConfigDefault": {
+                "type": "geometric::SBL",
+                "range": 0.0,
+            },
+            "ESTkConfigDefault": {
+                "type": "geometric::EST",
+                "range": 0.0,
+            },
+            "LBKPIECEkConfigDefault": {
+                "type": "geometric::LBKPIECE",
+                "range": 0.0,
+            },
+            "BKPIECEkConfigDefault": {
+                "type": "geometric::BKPIECE",
+                "range": 0.0,
+            },
+            "KPIECEkConfigDefault": {
+                "type": "geometric::KPIECE",
+                "range": 0.0,
+            },
+            "RRTkConfigDefault": {
+                "type": "geometric::RRT",
+                "range": 0.0,
+            },
+            "RRTConnectkConfigDefault": {
+                "type": "geometric::RRTConnect",
+                "range": 0.0,
+            },
+            "RRTstarkConfigDefault": {
+                "type": "geometric::RRTstar",
+                "range": 0.0,
+            },
+            "TRRTkConfigDefault": {
+                "type": "geometric::TRRT",
+                "range": 0.0,
+            },
+            "PRMkConfigDefault": {
+                "type": "geometric::PRM",
+                "range": 0.0,
+            },
+            "PRMstarkConfigDefault": {
+                "type": "geometric::PRMstar",
+                "range": 0.0,
+            },
+            "FMTkConfigDefault": {
+                "type": "geometric::FMT",
+                "range": 0.0,
+            },
+            "BFMTkConfigDefault": {
+                "type": "geometric::BFMT",
+                "range": 0.0,
+            },
+            "PDSTkConfigDefault": {
+                "type": "geometric::PDST",
+                "range": 0.0,
+            },
+            "STRIDEkConfigDefault": {
+                "type": "geometric::STRIDE",
+                "range": 0.0,
+            },
+            "BiTRRTkConfigDefault": {
+                "type": "geometric::BiTRRT",
+                "range": 0.0,
+            },
+            "LBTRRTkConfigDefault": {
+                "type": "geometric::LBTRRT",
+                "range": 0.0,
+            },
+            "BiESTkConfigDefault": {
+                "type": "geometric::BiEST",
+                "range": 0.0,
+            },
+            "ProjESTkConfigDefault": {
+                "type": "geometric::ProjEST",
+                "range": 0.0,
+            },
+            "LazyPRMkConfigDefault": {
+                "type": "geometric::LazyPRM",
+                "range": 0.0,
+            },
+            "SPARSkConfigDefault": {
+                "type": "geometric::SPARS",
+                "range": 0.0,
+            },
+            "SPARStwokConfigDefault": {
+                "type": "geometric::SPARStwo",
+                "range": 0.0,
+            },
+            "AnytimePathShortening": {
+                "type": "geometric::AnytimePathShortening",
+                "range": 0.0,
+            },
         },
-        "ESTkConfigDefault": {
-            "type": "geometric::EST",
-            "range": 0.0,
+        # Pilz Industrial Motion Planner
+        "pilz_industrial_motion_planner": {
+            "PTP": {
+                "type": "pilz_industrial_motion_planner/CommandPlanner",
+            },
+            "LIN": {
+                "type": "pilz_industrial_motion_planner/CommandPlanner",
+            },
+            "CIRC": {
+                "type": "pilz_industrial_motion_planner/CommandPlanner",
+            },
         },
-        "LBKPIECEkConfigDefault": {
-            "type": "geometric::LBKPIECE",
-            "range": 0.0,
+        # CHOMP
+        "chomp_interface/CHOMPPlanner": {
+            "chomp": {
+                "type": "chomp_interface/CHOMPPlanner",
+            },
         },
-        "BKPIECEkConfigDefault": {
-            "type": "geometric::BKPIECE",
-            "range": 0.0,
+
+        # STOMP
+        "stomp_moveit/StompPlanner": {
+            "stomp": {
+                "type": "stomp_moveit/StompPlanner",
+            },
         },
-        "KPIECEkConfigDefault": {
-            "type": "geometric::KPIECE",
-            "range": 0.0,
-        },
-        "RRTkConfigDefault": {
-            "type": "geometric::RRT",
-            "range": 0.0,
-        },
-        "RRTConnectkConfigDefault": {
-            "type": "geometric::RRTConnect",
-            "range": 0.0,
-        },
-        "RRTstarkConfigDefault": {
-            "type": "geometric::RRTstar",
-            "range": 0.0,
-        },
-        "TRRTkConfigDefault": {
-            "type": "geometric::TRRT",
-            "range": 0.0,
-        },
-        "PRMkConfigDefault": {
-            "type": "geometric::PRM",
-            "range": 0.0,
-        },
-        "PRMstarkConfigDefault": {
-            "type": "geometric::PRMstar",
-            "range": 0.0,
-        },
-        "FMTkConfigDefault": {
-            "type": "geometric::FMT",
-            "range": 0.0,
-        },
-        "BFMTkConfigDefault": {
-            "type": "geometric::BFMT",
-            "range": 0.0,
-        },
-        "PDSTkConfigDefault": {
-            "type": "geometric::PDST",
-            "range": 0.0,
-        },
-        "STRIDEkConfigDefault": {
-            "type": "geometric::STRIDE",
-            "range": 0.0,
-        },
-        "BiTRRTkConfigDefault": {
-            "type": "geometric::BiTRRT",
-            "range": 0.0,
-        },
-        "LBTRRTkConfigDefault": {
-            "type": "geometric::LBTRRT",
-            "range": 0.0,
-        },
-        "BiESTkConfigDefault": {
-            "type": "geometric::BiEST",
-            "range": 0.0,
-        },
-        "ProjESTkConfigDefault": {
-            "type": "geometric::ProjEST",
-            "range": 0.0,
-        },
-        "LazyPRMkConfigDefault": {
-            "type": "geometric::LazyPRM",
-            "range": 0.0,
-        },
-        "SPARSkConfigDefault": {
-            "type": "geometric::SPARS",
-            "range": 0.0,
-        },
-        "SPARStwokConfigDefault": {
-            "type": "geometric::SPARStwo",
-            "range": 0.0,
-        },
-        "AnytimePathShortening": {
-            "type": "geometric::AnytimePathShortening",
-            "range": 0.0,
-        },
+
+        # TrajOpt (only if a compatible plugin is installed)
+        "trajopt_interface/TrajOptPlanner": {
+            "trajopt": {
+                "type": "trajopt_interface/TrajOptPlanner",
+            },
+        }
     }
 
     def __init__(self) -> None:
@@ -233,6 +268,8 @@ class TrajSim2DNode(Node):
         self._moveit_launch_service = None
         self._moveit_stop_timeout = 10.0
         self._moveit_launch_error = None
+        self.pipeline_id: str = None
+        self.config_dir: Path = None
         
         # MoveIt interfaces
         self._moveit_action_client = None
@@ -534,17 +571,20 @@ class TrajSim2DNode(Node):
             if temporary_path is not None:
                 temporary_path.unlink(missing_ok=True)
 
-    def _restart_moveit(self) -> None:
+    def _restart_moveit(self,refresh_config=True,pipeline_id="ompl") -> None:
         self.get_logger().info("Restarting MoveIt")
 
-        config_dir = self._generate_moveit_config()
+        if refresh_config:
+            self.config_dir = self._generate_moveit_config()
 
         if not self._relaunch_moveit_client.wait_for_service(timeout_sec=5.0):
             self._pending_goal_error = "MoveIt restart service is unavailable"
 
         request = RestartMoveit.Request()
-        request.foldername = str(config_dir)
-
+        request.foldername = str(self.config_dir)
+        request.pipeline_id = str(pipeline_id)
+        self.pipeline_id = pipeline_id
+        
         try:
             response = self._relaunch_moveit_client.call(request)
 
@@ -605,11 +645,15 @@ class TrajSim2DNode(Node):
         for filename in (
             "robot.urdf",
             "robot.srdf",
-            "kinematics.yaml",
-            "ompl_planning.yaml",
+            "kinematics.yaml"
         ):
             (config_dir / filename).unlink(missing_ok=True)
 
+        # Remove all files matching *_planning.yaml
+        for filepath in config_dir.glob("*_planning.yaml"):
+            filepath.unlink(missing_ok=True)
+            
+            
         # Save the robot descriptions.
         (config_dir / "robot.urdf").write_text(
             self.description,
@@ -632,31 +676,38 @@ class TrajSim2DNode(Node):
         with (config_dir / "kinematics.yaml").open("w") as f:
             yaml.safe_dump(kinematics, f,sort_keys=False)
 
-        # Generic OMPL configuration.
-        ompl_planner_config = {
-            "planning_plugin": "ompl_interface/OMPLPlanner",
+        # Setup all configuration file options
+        for plugin,planner_config in self.PLANNER_CONFIGS.items():
+            
+            joint_list = self._get_joint_list(self.manipulator.n)
+            
+            planner_config = {
+                "planning_plugin": plugin,
 
-            "request_adapters": (
-                "default_planner_request_adapters/AddTimeOptimalParameterization "
-                "default_planner_request_adapters/ResolveConstraintFrames "
-                "default_planner_request_adapters/FixWorkspaceBounds "
-                "default_planner_request_adapters/FixStartStateBounds "
-                "default_planner_request_adapters/FixStartStateCollision "
-                "default_planner_request_adapters/FixStartStatePathConstraints"
-            ),
+                "request_adapters": (
+                    "default_planner_request_adapters/AddTimeOptimalParameterization "
+                    "default_planner_request_adapters/ResolveConstraintFrames "
+                    "default_planner_request_adapters/FixWorkspaceBounds "
+                    "default_planner_request_adapters/FixStartStateBounds "
+                    "default_planner_request_adapters/FixStartStateCollision "
+                    "default_planner_request_adapters/FixStartStatePathConstraints"
+                ),
 
-            "start_state_max_bounds_error": 0.1,
+                "start_state_max_bounds_error": 0.1,
 
-            "planner_configs": self.OMPL_PLANNER_CONFIG,
+                "planner_configs": planner_config,
 
-            "manipulator": {
-                "planner_configs": list(self.OMPL_PLANNER_CONFIG.keys()),
-                "projection_evaluator": "joints(joint_1,joint_2)",
-            },
-        }
-
-        with (config_dir / "ompl_planning.yaml").open("w") as f:
-            yaml.safe_dump(ompl_planner_config, f, sort_keys=False)
+                "manipulator": {
+                    "planner_configs": list(planner_config.keys()),
+                    "projection_evaluator": f"joints({joint_list})",
+                },
+            }
+            
+            for plugin_id in self.PLUGIN_LIST:
+                if plugin.startswith(plugin_id):
+                    with (config_dir / (plugin_id +"_planning.yaml")).open("w") as f:
+                        yaml.safe_dump(planner_config, f, sort_keys=False)
+                    break
 
         self.get_logger().info(
             f"Generated MoveIt configuration in {config_dir}"
@@ -741,6 +792,15 @@ class TrajSim2DNode(Node):
         )
 
         return ET.tostring(srdf, encoding="unicode")
+    
+    def _get_joint_list(self,n:int) -> str:
+        joint_string = "joint_"
+        joint_list = ""
+        for i in range(n-1):
+            joint_list = joint_list + joint_string + str(i+1) + ","
+        joint_list = joint_list + joint_string + str(n)
+        
+        return joint_list
     
     def _reset_visualisation(self) -> None:
         if self.canvas is not None:
@@ -833,6 +893,8 @@ class TrajSim2DNode(Node):
                 self._pending_goal_error = "MOVEIT ERROR: " + self._moveit_error
                 self.state = self.IDLE
                 self._pending_goal = None
+            elif str(self.pipeline_id) != str(self._pending_goal.request.pipeline_id):
+                self._restart_moveit(False,self._pending_goal.request.pipeline_id)
             elif self._planning_scene is None:
                 self.state = self.GENERATING_PLANNING_SCENE
                 self._planning_scene = self._generate_planning_scene()
@@ -1270,9 +1332,9 @@ class TrajSim2DNode(Node):
 
         if not self._planning_scene_client.service_is_ready():
             if not self._planning_scene_client.wait_for_service(
-                timeout_sec=0.0
+                timeout_sec=1.0
             ):
-                # Retry on the next pass through the controller loop.
+                self._moveit_error = "Planning_Scene_Server_Not_Available"
                 return
 
         service_request = ApplyPlanningScene.Request()

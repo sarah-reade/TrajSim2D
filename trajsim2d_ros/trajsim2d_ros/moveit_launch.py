@@ -18,6 +18,7 @@ from trajsim2d_ros.srv import RestartMoveit
 @dataclass
 class RestartRequest:
     folder: Path
+    pipeline: str
     completed: threading.Event
     result: bool = False
 
@@ -37,21 +38,25 @@ class MoveitLaunchServer(Node):
         self.get_logger().info(
             "MoveIt launch server initialized; MoveIt will start on the first service call"
         )
+        
+        self.planning_config_file = None
 
     def _handle_restart(self, request, response):
         config_dir = Path(request.foldername).expanduser().resolve()
+        self.planning_config_file = request.pipeline_id + "_planning.yaml"
+        
         self.get_logger().info(f"Received MoveIt restart request: {config_dir}")
 
         try:
             self._validate_config_dir(config_dir)
-        except Exception:
-            self.get_logger().exception(
-                f"Invalid MoveIt configuration directory: {config_dir}"
+        except Exception as ex:
+            self.get_logger().error(
+                f"Invalid MoveIt configuration directory: {config_dir}\n{ex}"
             )
             response.result = False
             return response
 
-        restart = RestartRequest(folder=config_dir, completed=threading.Event())
+        restart = RestartRequest(folder=config_dir,pipeline=request.pipeline_id, completed=threading.Event())
         with self._lock:
             if self._pending_restart is not None:
                 self.get_logger().warning("A MoveIt restart is already pending")
@@ -74,13 +79,12 @@ class MoveitLaunchServer(Node):
         response.result = restart.result
         return response
 
-    @staticmethod
-    def _validate_config_dir(config_dir: Path) -> None:
+    def _validate_config_dir(self,config_dir: Path) -> None:
         required_files = (
             "robot.urdf",
             "robot.srdf",
             "kinematics.yaml",
-            "ompl_planning.yaml",
+            self.planning_config_file,
         )
         if not config_dir.is_dir():
             raise FileNotFoundError(f"Configuration directory does not exist: {config_dir}")
@@ -89,22 +93,22 @@ class MoveitLaunchServer(Node):
             if not path.is_file():
                 raise FileNotFoundError(f"Required configuration file is missing: {path}")
 
-    def _create_moveit_launch(self, config_dir: Path) -> LaunchService:
+    def _create_moveit_launch(self, config_dir: Path,pipeline: str) -> LaunchService:
         self._validate_config_dir(config_dir)
         urdf = (config_dir / "robot.urdf").read_text(encoding="utf-8")
         srdf = (config_dir / "robot.srdf").read_text(encoding="utf-8")
         with (config_dir / "kinematics.yaml").open(encoding="utf-8") as f:
             kinematics = yaml.safe_load(f) or {}
-        with (config_dir / "ompl_planning.yaml").open(encoding="utf-8") as f:
-            ompl = yaml.safe_load(f) or {}
+        with (config_dir / self.planning_config_file).open(encoding="utf-8") as f:
+            planner = yaml.safe_load(f) or {}
 
         parameters = {
             "robot_description": urdf,
             "robot_description_semantic": srdf,
             "robot_description_kinematics": kinematics,
-            "planning_pipelines": ["ompl"],
-            "default_planning_pipeline": "ompl",
-            "ompl": ompl,
+            "planning_pipelines": [pipeline],
+            "default_planning_pipeline": pipeline,
+            pipeline: planner,
             "allow_trajectory_execution": False,
             "moveit_controller_manager": (
                 "moveit_fake_controller_manager/MoveItFakeControllerManager"
@@ -138,8 +142,8 @@ class MoveitLaunchServer(Node):
 
             launch_service = None
             try:
-                self.get_logger().info(f"Launching MoveIt using: {restart.folder}")
-                launch_service = self._create_moveit_launch(restart.folder)
+                self.get_logger().info(f"Launching MoveIt using: {restart.folder},{restart.pipeline}")
+                launch_service = self._create_moveit_launch(restart.folder,restart.pipeline)
                 with self._lock:
                     self._moveit_launch_service = launch_service
                     # A newer request may have arrived while the launch was built.
@@ -151,8 +155,8 @@ class MoveitLaunchServer(Node):
                     launch_service.shutdown()
                 return_code = launch_service.run()
                 self.get_logger().info(f"MoveIt launch exited with code {return_code}")
-            except Exception:
-                self.get_logger().exception("Failed to configure or run MoveIt launch")
+            except Exception as ex:
+                self.get_logger().error(f"Failed to configure or run MoveIt launch: {ex}")
                 restart.result = False
                 restart.completed.set()
             finally:
