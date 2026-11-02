@@ -1,0 +1,120 @@
+<robot name="trajsim2d_manipulator">
+  <trajsim2d>
+    <base_offset>0.37397230273898346</base_offset>
+    <link_width>0.13668932250433943</link_width>
+    <joint_radius>0.17875652614309456</joint_radius>
+    <max_velocity>0.2640563993148254</max_velocity>
+    <joint_position_limit>2.411223160244947</joint_position_limit>
+    <joint_torque_limit>217.43082047056896</joint_torque_limit>
+    <clip_ends_default>0.01</clip_ends_default>
+    <link_lengths>0.8253577953183363 0.43695216717559104 0.9656150528022278</link_lengths>
+    <link_masses>2.96639209823651 2.885506219659238 4.718514554714189 4.962417583584617</link_masses>
+    <base_transform>-0.9996273413646539 0.027297955898449994 1.9421101550156863 -0.027297955898449994 -0.9996273413646539 1.8065412996184158 0.0 0.0 1.0</base_transform>
+    <end_effector>
+      <adhesion>21.976707950447878</adhesion>
+      <ee_width>0.293746951331195</ee_width>
+      <friction>0.766315517469932</friction>
+    </end_effector>
+  </trajsim2d>
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0.09760788829794445 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.13668932250433943 0.1952157765958889 0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0.09760788829794445 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.13668932250433943 0.1952157765958889 0.01" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="link_1">
+    <visual>
+      <origin xyz="0 0.41267889765916815 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.13668932250433943 0.4678447430321472 0.01" />
+      </geometry>
+    </visual>
+    <visual>
+      <geometry>
+        <cylinder radius="0.17875652614309456" length="0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.17875652614309456" length="0.01" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint_1" type="revolute">
+    <parent link="base_link" />
+    <child link="link_1" />
+    <origin xyz="0 0.37397230273898346 0" rpy="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit lower="-2.411223160244947" upper="2.411223160244947" effort="217.43082047056896" velocity="0.2640563993148254" />
+  </joint>
+  <link name="link_2">
+    <visual>
+      <origin xyz="0 0.21847608358779552 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.13668932250433943 0.07943911488940192 0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0.21847608358779552 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.13668932250433943 0.07943911488940192 0.01" />
+      </geometry>
+    </collision>
+    <visual>
+      <geometry>
+        <cylinder radius="0.17875652614309456" length="0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.17875652614309456" length="0.01" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint_2" type="revolute">
+    <parent link="link_1" />
+    <child link="link_2" />
+    <origin xyz="0 0.8253577953183363 0" rpy="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit lower="-2.411223160244947" upper="2.411223160244947" effort="217.43082047056896" velocity="0.2640563993148254" />
+  </joint>
+  <link name="link_3">
+    <visual>
+      <origin xyz="0 0.5721857894726612 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.13668932250433943 0.7868585266591333 0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0.5721857894726612 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.13668932250433943 0.7868585266591333 0.01" />
+      </geometry>
+    </collision>
+    <visual>
+      <geometry>
+        <cylinder radius="0.17875652614309456" length="0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.17875652614309456" length="0.01" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint_3" type="revolute">
+    <parent link="link_2" />
+    <child link="link_3" />
+    <origin xyz="0 0.43695216717559104 0" rpy="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit lower="-2.411223160244947" upper="2.411223160244947" effort="217.43082047056896" velocity="0.2640563993148254" />
+  </joint>
+</robot>

@@ -1,0 +1,213 @@
+<robot name="trajsim2d_manipulator">
+  <trajsim2d>
+    <base_offset>0.1434966946837063</base_offset>
+    <link_width>0.0355252837287286</link_width>
+    <joint_radius>0.0702282639238695</joint_radius>
+    <max_velocity>0.06228250974615395</max_velocity>
+    <joint_position_limit>2.6461290108687345</joint_position_limit>
+    <joint_torque_limit>284.96297339931306</joint_torque_limit>
+    <clip_ends_default>0.01</clip_ends_default>
+    <link_lengths>0.34450933915934284 0.2172754131615072 0.601612312946504 0.6076605984657192 0.18208902478228964 0.9505652375021939</link_lengths>
+    <link_masses>3.1885216329623787 2.360136744601261 0.6058891604237018 0.20314753884630216 2.1583943733203417 3.0688379379732194 3.9646185288304125</link_masses>
+    <base_transform>-0.9933586960239552 0.11505868517233876 2.557376007193227 -0.11505868517233876 -0.9933586960239552 1.198304114382623 0.0 0.0 1.0</base_transform>
+    <end_effector>
+      <adhesion>21.64748260769845</adhesion>
+      <ee_width>0.07211204457446573</ee_width>
+      <friction>0.7515762666684555</friction>
+    </end_effector>
+  </trajsim2d>
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0.0366342153799184 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0355252837287286 0.0732684307598368 0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0.0366342153799184 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0355252837287286 0.0732684307598368 0.01" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="link_1">
+    <visual>
+      <origin xyz="0 0.17225466957967142 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0355252837287286 0.20405281131160385 0.01" />
+      </geometry>
+    </visual>
+    <visual>
+      <geometry>
+        <cylinder radius="0.0702282639238695" length="0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.0702282639238695" length="0.01" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint_1" type="revolute">
+    <parent link="base_link" />
+    <child link="link_1" />
+    <origin xyz="0 0.1434966946837063 0" rpy="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit lower="-2.6461290108687345" upper="2.6461290108687345" effort="284.96297339931306" velocity="0.06228250974615395" />
+  </joint>
+  <link name="link_2">
+    <visual>
+      <origin xyz="0 0.1086377065807536 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0355252837287286 0.07681888531376821 0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0.1086377065807536 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0355252837287286 0.07681888531376821 0.01" />
+      </geometry>
+    </collision>
+    <visual>
+      <geometry>
+        <cylinder radius="0.0702282639238695" length="0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.0702282639238695" length="0.01" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint_2" type="revolute">
+    <parent link="link_1" />
+    <child link="link_2" />
+    <origin xyz="0 0.34450933915934284 0" rpy="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit lower="-2.6461290108687345" upper="2.6461290108687345" effort="284.96297339931306" velocity="0.06228250974615395" />
+  </joint>
+  <link name="link_3">
+    <visual>
+      <origin xyz="0 0.300806156473252 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0355252837287286 0.461155785098765 0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0.300806156473252 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0355252837287286 0.461155785098765 0.01" />
+      </geometry>
+    </collision>
+    <visual>
+      <geometry>
+        <cylinder radius="0.0702282639238695" length="0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.0702282639238695" length="0.01" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint_3" type="revolute">
+    <parent link="link_2" />
+    <child link="link_3" />
+    <origin xyz="0 0.2172754131615072 0" rpy="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit lower="-2.6461290108687345" upper="2.6461290108687345" effort="284.96297339931306" velocity="0.06228250974615395" />
+  </joint>
+  <link name="link_4">
+    <visual>
+      <origin xyz="0 0.3038302992328596 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0355252837287286 0.4672040706179802 0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0.3038302992328596 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0355252837287286 0.4672040706179802 0.01" />
+      </geometry>
+    </collision>
+    <visual>
+      <geometry>
+        <cylinder radius="0.0702282639238695" length="0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.0702282639238695" length="0.01" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint_4" type="revolute">
+    <parent link="link_3" />
+    <child link="link_4" />
+    <origin xyz="0 0.601612312946504 0" rpy="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit lower="-2.6461290108687345" upper="2.6461290108687345" effort="284.96297339931306" velocity="0.06228250974615395" />
+  </joint>
+  <link name="link_5">
+    <visual>
+      <origin xyz="0 0.09104451239114482 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0355252837287286 0.04163249693455065 0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0.09104451239114482 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0355252837287286 0.04163249693455065 0.01" />
+      </geometry>
+    </collision>
+    <visual>
+      <geometry>
+        <cylinder radius="0.0702282639238695" length="0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.0702282639238695" length="0.01" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint_5" type="revolute">
+    <parent link="link_4" />
+    <child link="link_5" />
+    <origin xyz="0 0.6076605984657192 0" rpy="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit lower="-2.6461290108687345" upper="2.6461290108687345" effort="284.96297339931306" velocity="0.06228250974615395" />
+  </joint>
+  <link name="link_6">
+    <visual>
+      <origin xyz="0 0.5103967507130317 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0355252837287286 0.8803369735783244 0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0.5103967507130317 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0355252837287286 0.8803369735783244 0.01" />
+      </geometry>
+    </collision>
+    <visual>
+      <geometry>
+        <cylinder radius="0.0702282639238695" length="0.01" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.0702282639238695" length="0.01" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint_6" type="revolute">
+    <parent link="link_5" />
+    <child link="link_6" />
+    <origin xyz="0 0.18208902478228964 0" rpy="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit lower="-2.6461290108687345" upper="2.6461290108687345" effort="284.96297339931306" velocity="0.06228250974615395" />
+  </joint>
+</robot>
