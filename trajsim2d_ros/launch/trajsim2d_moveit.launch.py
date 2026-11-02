@@ -4,7 +4,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     return LaunchDescription(
-        [Node(package="trajsim2d_ros", executable="trajsim2d_moveit_node", output="screen"),
+        [Node(package="trajsim2d_ros", executable="trajsim2d_moveit_node", output="screen",parameters=[{"display_trajectory": True}],respawn=True),
          Node(package="trajsim2d_ros", executable="moveit_launch_node", output="screen"),
          
          Node(package="tf2_ros",executable="static_transform_publisher",

@@ -16,7 +16,8 @@ class MoveitClient(Node):
 
     ENVIRONMENTS = ["/home/ewalker/Downloads/moveit_safe_env/world.canvas"]
     PLANNERS = {
-        "ompl": ["SBLkConfigDefault","ESTkConfigDefault","RRTConnectkConfigDefault"]
+        "ompl": ["SBLkConfigDefault","ESTkConfigDefault","RRTConnectkConfigDefault"],
+        "chomp": ["chomp"]
     }
 
     def __init__(self):
@@ -184,7 +185,7 @@ class MoveitClient(Node):
                                 
                             while self.get_sim_node_state() != "IDLE":
                                 self.get_logger().info(f"Waiting for simulation to become idle. Simulation node state: {self.sim_node_state}")
-                                
+                            
                             request = self.build_motion_plan_request(pipeline,planner)
                             foldername = self.generate_folder(env,planner)
                             self.send_moveit_goal(request,foldername)

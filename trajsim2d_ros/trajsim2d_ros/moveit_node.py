@@ -89,7 +89,15 @@ class TrajSim2DNode(Node):
         "pink":        ColorRGBA(r=1.0, g=0.4, b=0.7, a=1.0),
     }
     
-    PLUGIN_LIST = ["ompl","pilz_industrial_motion_planner","chomp","stomp","trajopt"]
+    PLUGIN_LIST = [
+        "ompl",
+        "pilz_industrial_motion_planner",
+        "chomp",
+        "stomp",
+        "trajopt",
+        "moveit_plugin_template",
+    ]
+    
     PLANNER_CONFIGS = {
         "ompl_interface/OMPLPlanner": {
             "SBLkConfigDefault": {
@@ -216,7 +224,19 @@ class TrajSim2DNode(Node):
             "trajopt": {
                 "type": "trajopt_interface/TrajOptPlanner",
             },
-        }
+        },
+        
+        # MoveIt planner template
+        "moveit_plugin_template/TemplatePlanner": {
+            "DirectLinePlanner": {
+                "num_steps": 100,
+            },
+            "WavyLinePlanner": {
+                "num_steps": 100,
+                "amplitude": 0.05,
+                "frequency": 1.0,
+            },
+        },
     }
 
     def __init__(self) -> None:
@@ -490,15 +510,16 @@ class TrajSim2DNode(Node):
         self._publish_robot_description()
         self._restart_moveit()
 
-    def _generate_random_environment(self) -> None:
-        border_size = 5.0
-        self.manipulator = PlanarManipulator()
-        self.border = generate_random_border(border_size=border_size, smoothness=0.1)
+    def _generate_random_environment(self,data:str) -> None:
+        border_size, smoothness, n_obs, n, max_velocity = self._process_random_data(data)
+        self.border = generate_random_border(border_size=border_size, smoothness=smoothness)
         self.obstacles, _ = generate_random_convex_objects(
             border_size=border_size,
             border=self.border,
+            num_objs=n_obs
         )
-        self.base_transform = np.eye(3)
+        
+        self.manipulator = PlanarManipulator(n=n,max_velocity=max_velocity)
         self.start_config = np.zeros(self.manipulator.n, dtype=float)
         self.goal_config = np.zeros(self.manipulator.n, dtype=float)
         
@@ -527,7 +548,38 @@ class TrajSim2DNode(Node):
         
         if self.manipulator.in_collision(self.start_config) or self.manipulator.in_collision(self.goal_config):
             self._pending_goal_error = "Failed to generate a random environment with valid start or goal configuration"
+            
+    def _process_random_data(self,data: str) -> dict:
+        params = {
+            "n_obs": None,
+            "n": None,
+            "max_velocity": None,
+            "border_size": 5.0,
+            "smoothness": 1.0,
+        }
 
+        for key in params:
+            match = re.search(
+                rf"\b{key}\s*=\s*([^,\s]+)",
+                data
+            )
+            if match:
+                value = match.group(1)
+                try:
+                    params[key] = float(value)
+                    if key == "n" or key == "n_obs":
+                        params[key] = int(value)
+                except ValueError:
+                    params[key] = value
+
+        return (
+            params["border_size"],
+            params["smoothness"],
+            params["n_obs"],
+            params["n"],
+            params["max_velocity"],
+        )
+    
     def _publish_robot_description(self) -> None:
         if self.manipulator is None:
             return
@@ -675,10 +727,9 @@ class TrajSim2DNode(Node):
         
         with (config_dir / "kinematics.yaml").open("w") as f:
             yaml.safe_dump(kinematics, f,sort_keys=False)
-
+        
         # Setup all configuration file options
-        for plugin,planner_config in self.PLANNER_CONFIGS.items():
-            
+        for plugin, planner_configs in self.PLANNER_CONFIGS.items():
             joint_list = self._get_joint_list(self.manipulator.n)
             
             planner_config = {
@@ -695,10 +746,10 @@ class TrajSim2DNode(Node):
 
                 "start_state_max_bounds_error": 0.1,
 
-                "planner_configs": planner_config,
+                "planner_configs": planner_configs,
 
                 "manipulator": {
-                    "planner_configs": list(planner_config.keys()),
+                    "planner_configs": list(planner_configs.keys()),
                     "projection_evaluator": f"joints({joint_list})",
                 },
             }
@@ -1686,7 +1737,7 @@ class TrajSim2DNode(Node):
         try:
             self.state = self._goal_state(request.goal)
             if request.goal == Simulation.Goal.GENERATE_RANDOM_ENVIRONMENT:
-                self._generate_random_environment()
+                self._generate_random_environment(request.data)
             elif request.goal == Simulation.Goal.LOAD_ENVIRONMENT_FROM_FILE:
                 if not request.data:
                     raise ValueError("environment filename cannot be empty")

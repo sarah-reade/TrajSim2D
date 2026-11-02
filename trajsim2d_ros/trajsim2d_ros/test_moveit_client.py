@@ -71,13 +71,13 @@ def main(args=None):
     # Build the request
     request = MotionPlanRequest()
     request.group_name = "manipulator"
-    request.pipeline_id = "chomp"
-    request.planner_id = "chomp"# "RRTstarkConfigDefault"#"LBKPIECEkConfigDefault"#"RRTConnectkConfigDefault"
+    request.pipeline_id = "moveit_plugin_template"#"ompl"#"moveit_plugin_template"#"chomp"
+    request.planner_id = "WavyLinePlanner" #"DirectLinePlanner" #"chomp"# "RRTstarkConfigDefault"#"LBKPIECEkConfigDefault"#RRTConnectkConfigDefault #SBLkConfigDefault
     request.num_planning_attempts = 5
-    request.allowed_planning_time = 5.0
+    request.allowed_planning_time = 80.0
 
     # The server generates the actual goal constraints in your implementation.
-    foldername = "/tmp/moveit_plans"
+    foldername = "/tmp/moveit_plans/level9/"
 
     try:
         client.send_goal(request, foldername)
