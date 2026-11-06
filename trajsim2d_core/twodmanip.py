@@ -165,7 +165,18 @@ class PlanarManipulator:
             str(float(value)) for value in np.asarray(self.base_tf).ravel()
         )
 
-        end_effector = ET.SubElement(metadata, "end_effector")
+        end_effector = ET.SubElement(
+            robot,
+            "end_effector",
+            attrib={
+                "name": "ee_1",
+                "type": "magnetic"
+            }
+        )
+        parent_link = ET.SubElement(end_effector, "link")
+        parent_link.text = "base_link"
+        offset = ET.SubElement(end_effector, "offset")
+        ET.SubElement(offset, "origin", {"xyz": "0 0 0", "rpy": "0 0 0"})
         add_value(end_effector, "adhesion", self.end_effector.adhesion)
         add_value(end_effector, "ee_width", self.end_effector.width)
         add_value(end_effector, "friction", self.end_effector.friction)
@@ -305,7 +316,7 @@ class PlanarManipulator:
         if transform_values.size != 9:
             raise ValueError("URDF base_transform must contain 9 values")
 
-        end_effector = metadata.find("end_effector")
+        end_effector = root.find("end_effector")
         if end_effector is None:
             raise ValueError("URDF metadata is missing 'end_effector'")
 

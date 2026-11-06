@@ -13,11 +13,10 @@ from trajsim2d_ros.action import MoveitRequest, Simulation
 
 
 class MoveitClient(Node):
-
-    ENVIRONMENTS = ["/home/ewalker/Downloads/moveit_safe_env/world.canvas"]
+    folder = "/home/ewalker/Code/TrajSim2D/example_environments/"
+    ENVIRONMENTS = [folder + "1/world.canvas",folder + "2/world.canvas",folder + "3/world.canvas",folder + "4/world.canvas",folder + "5/world.canvas",folder + "6/world.canvas",folder + "7/world.canvas",folder + "8/world.canvas",folder + "9/world.canvas"]
     PLANNERS = {
-        "ompl": ["SBLkConfigDefault","ESTkConfigDefault","RRTConnectkConfigDefault"],
-        "chomp": ["chomp"]
+        "adhesion_safe": ["APFReference"]
     }
 
     def __init__(self):

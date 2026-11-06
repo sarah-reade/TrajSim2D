@@ -71,8 +71,8 @@ def main(args=None):
     # Build the request
     request = MotionPlanRequest()
     request.group_name = "manipulator"
-    request.pipeline_id = "moveit_plugin_template"#"ompl"#"moveit_plugin_template"#"chomp"
-    request.planner_id = "WavyLinePlanner" #"DirectLinePlanner" #"chomp"# "RRTstarkConfigDefault"#"LBKPIECEkConfigDefault"#RRTConnectkConfigDefault #SBLkConfigDefault
+    request.pipeline_id = "adhesion_safe"#"ompl"#"moveit_plugin_template"#"chomp"
+    request.planner_id = "APFReference"# "RRTConnectReference"#"APFReference" #"DirectLinePlanner" #"chomp"# "RRTstarkConfigDefault"#"LBKPIECEkConfigDefault"#RRTConnectkConfigDefault #SBLkConfigDefault
     request.num_planning_attempts = 5
     request.allowed_planning_time = 80.0
 

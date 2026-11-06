@@ -84,6 +84,7 @@ class MoveitLaunchServer(Node):
             "robot.urdf",
             "robot.srdf",
             "kinematics.yaml",
+            "joint_limits.yaml",
             self.planning_config_file,
         )
         if not config_dir.is_dir():
@@ -99,6 +100,8 @@ class MoveitLaunchServer(Node):
         srdf = (config_dir / "robot.srdf").read_text(encoding="utf-8")
         with (config_dir / "kinematics.yaml").open(encoding="utf-8") as f:
             kinematics = yaml.safe_load(f) or {}
+        with (config_dir / "joint_limits.yaml").open(encoding="utf-8") as f:
+            joint_limits = yaml.safe_load(f) or {}
         with (config_dir / self.planning_config_file).open(encoding="utf-8") as f:
             planner = yaml.safe_load(f) or {}
 
@@ -106,6 +109,7 @@ class MoveitLaunchServer(Node):
             "robot_description": urdf,
             "robot_description_semantic": srdf,
             "robot_description_kinematics": kinematics,
+            "robot_description_planning": joint_limits,
             "planning_pipelines": [pipeline],
             "default_planning_pipeline": pipeline,
             pipeline: planner,

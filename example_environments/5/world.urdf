@@ -10,12 +10,16 @@
     <link_lengths>0.34450933915934284 0.2172754131615072 0.601612312946504 0.6076605984657192 0.18208902478228964 0.9505652375021939</link_lengths>
     <link_masses>3.1885216329623787 2.360136744601261 0.6058891604237018 0.20314753884630216 2.1583943733203417 3.0688379379732194 3.9646185288304125</link_masses>
     <base_transform>-0.9933586960239552 0.11505868517233876 2.557376007193227 -0.11505868517233876 -0.9933586960239552 1.198304114382623 0.0 0.0 1.0</base_transform>
-    <end_effector>
-      <adhesion>21.64748260769845</adhesion>
-      <ee_width>0.07211204457446573</ee_width>
-      <friction>0.7515762666684555</friction>
-    </end_effector>
   </trajsim2d>
+  <end_effector name="ee_1" type="magnetic">
+    <link>base_link</link>
+    <offset>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+    </offset>
+    <adhesion>18.600828474276508</adhesion>
+    <ee_width>0.28681382376494596</ee_width>
+    <friction>0.6731553100493295</friction>
+  </end_effector>
   <link name="base_link">
     <visual>
       <origin xyz="0 0.0366342153799184 0" rpy="0 0 0" />

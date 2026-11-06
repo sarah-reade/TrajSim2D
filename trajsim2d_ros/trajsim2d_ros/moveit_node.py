@@ -18,6 +18,33 @@ from pathlib import Path
 import yaml
 from collections.abc import Mapping
 
+_ADHESION_SAFE_PLANNER_IDS = (
+    "A1", "A2", "A3", "A4",
+    "B1", "B2", "B3", "B4",
+    "C1", "C2", "C3", "C4",
+    "APFReference", "RRTConnectReference",
+)
+
+_ADHESION_SAFE_PLANNER_DEFAULTS = {
+    "integration_step": 0.005,
+    "default_step": 0.05,
+    "maximum_step": 0.55,
+    "goal_bias": 0.01,
+    "max_iterations": 5,
+    "nearest_neighbours": 6,
+    "potential_epsilon": 1.0e-6,
+    "repulsive_threshold": 1.0,
+    "transition_temperature": 0.1,
+    "transition_normalisation": 1.0,
+    "temperature_factor": 2.0,
+    "jerk": 0.5
+}
+
+_ADHESION_SAFE_PLANNER_CONFIGS = {
+    planner_id: dict(_ADHESION_SAFE_PLANNER_DEFAULTS)
+    for planner_id in _ADHESION_SAFE_PLANNER_IDS
+}
+
 import rclpy
 from geometry_msgs.msg import Point, Pose, PoseStamped, TransformStamped
 from shape_msgs.msg import SolidPrimitive
@@ -90,6 +117,7 @@ class TrajSim2DNode(Node):
     }
     
     PLUGIN_LIST = [
+        "adhesion_safe",
         "ompl",
         "pilz_industrial_motion_planner",
         "chomp",
@@ -233,10 +261,14 @@ class TrajSim2DNode(Node):
             },
             "WavyLinePlanner": {
                 "num_steps": 100,
-                "amplitude": 0.05,
+                "amplitude": 1.0,
                 "frequency": 1.0,
             },
         },
+
+        # The generated file is adhesion_safe_planning.yaml.
+        "adhesion_safe_moveit_plugin/AdhesionPlannerManager":
+            _ADHESION_SAFE_PLANNER_CONFIGS,
     }
 
     def __init__(self) -> None:
@@ -697,7 +729,8 @@ class TrajSim2DNode(Node):
         for filename in (
             "robot.urdf",
             "robot.srdf",
-            "kinematics.yaml"
+            "kinematics.yaml",
+            "joint_limits.yaml"
         ):
             (config_dir / filename).unlink(missing_ok=True)
 
@@ -727,10 +760,22 @@ class TrajSim2DNode(Node):
         
         with (config_dir / "kinematics.yaml").open("w") as f:
             yaml.safe_dump(kinematics, f,sort_keys=False)
+            
+        joint_limits = self._generate_joint_limits_yaml()
+        
+        with (config_dir / "joint_limits.yaml").open("w") as f:
+            yaml.safe_dump(joint_limits, f,sort_keys=False)
         
         # Setup all configuration file options
         for plugin, planner_configs in self.PLANNER_CONFIGS.items():
             joint_list = self._get_joint_list(self.manipulator.n)
+            planner_configs = deepcopy(planner_configs)
+            if plugin == "adhesion_safe_moveit_plugin/AdhesionPlannerManager":
+                # The library uses the generated robot model for its optional
+                # Pinocchio dynamics path. Keep this path in each planner
+                # configuration because MoveIt passes configurations per ID.
+                for parameters in planner_configs.values():
+                    parameters["pinocchio_urdf"] = str(config_dir / "robot.urdf")
             
             planner_config = {
                 "planning_plugin": plugin,
@@ -766,6 +811,25 @@ class TrajSim2DNode(Node):
 
         return config_dir
 
+    def _generate_joint_limits_yaml(self):
+        max_v = self.manipulator.joint_limits.velocity
+        max_a = max_v  # Reach max velocity in 1 seconds
+        n = self.manipulator.n
+
+        joint_limits = {
+            "joint_limits": {
+                f"joint_{i + 1}": {
+                    "has_velocity_limits": True,
+                    "max_velocity": max_v,
+                    "has_acceleration_limits": True,
+                    "max_acceleration": max_a,
+                }
+                for i in range(n)
+            }
+        }
+
+        return joint_limits
+    
     def _generate_srdf(self,urdf: str) -> str:
         root = ET.fromstring(urdf)
 
